@@ -18,7 +18,7 @@ const sidebar        = $('sidebar');
 const welcomeScreen  = $('welcome-screen');
 const modeBadge      = $('mode-badge');
 const chatGuestName  = $('chat-guest-name');
-const chatGuestPhone = $('chat-guest-phone');
+const chatGuestMeta  = $('chat-guest-meta');
 const backBtn        = $('back-btn');
 const toast          = $('toast');
 
@@ -111,7 +111,10 @@ function renderConvList() {
       <div class="conv-item ${active}" data-id="${c.id}">
         <div class="conv-avatar">${initials}</div>
         <div class="conv-info">
-          <div class="conv-name">${esc(c.guest_name || c.guest_phone)}</div>
+          <div class="conv-name">
+            ${esc(c.guest_name || c.guest_phone)}
+            ${c.guest_language && c.guest_language !== 'es' ? `<span class="conv-lang">${langName(c.guest_language)}</span>` : ''}
+          </div>
           <div class="conv-preview">${esc(preview)}</div>
         </div>
         <div class="conv-time">${time}</div>
@@ -197,8 +200,11 @@ async function selectConversation(id) {
   const conv = state.conversations.find(c => c.id === id);
   if (!conv) return;
 
-  chatGuestName.textContent  = conv.guest_name || conv.guest_phone;
-  chatGuestPhone.textContent = conv.guest_phone;
+  chatGuestName.textContent = conv.guest_name || conv.guest_phone;
+  const langLabel = conv.guest_language && conv.guest_language !== 'es'
+    ? `${conv.guest_phone} · habla ${langName(conv.guest_language)}`
+    : conv.guest_phone;
+  chatGuestMeta.textContent = langLabel;
 
   // Móvil: ocultar sidebar, mostrar chat
   sidebar.classList.add('hidden');

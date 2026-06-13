@@ -34,13 +34,20 @@ async function translateWithDetection(text, targetLang) {
       detectedLanguage: detectDemo(text),
     };
   }
-  // Sin 'source': Google detecta el idioma automáticamente y lo devuelve en la respuesta
-  const res = await googleRequest('/language/translate/v2', { q: text, target: targetLang, format: 'text' });
-  const t = res.data?.translations?.[0];
-  return {
-    translatedText: t?.translatedText || text,
-    detectedLanguage: t?.detectedSourceLanguage || 'en',
-  };
+
+  // Paso 1: detectar idioma explícitamente
+  const detectRes = await googleRequest('/language/translate/v2/detect', { q: text });
+  const detectedLanguage = detectRes.data?.detections?.[0]?.[0]?.language || 'en';
+  console.log(`[Translate] Texto: "${text}" → Idioma detectado: ${detectedLanguage}`);
+
+  // Paso 2: traducir especificando el idioma origen (más fiable)
+  const translateRes = await googleRequest('/language/translate/v2', {
+    q: text, target: targetLang, source: detectedLanguage, format: 'text'
+  });
+  const translatedText = translateRes.data?.translations?.[0]?.translatedText || text;
+  console.log(`[Translate] Traducción: "${translatedText}"`);
+
+  return { translatedText, detectedLanguage };
 }
 
 async function detectLanguage(text) {

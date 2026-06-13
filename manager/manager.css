@@ -97,6 +97,17 @@ body {
 .conv-preview { color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.85rem; margin-top: 2px; }
 .conv-time { font-size: 0.72rem; color: #aaa; white-space: nowrap; }
 
+.conv-lang {
+  font-size: 0.65rem;
+  background: #e8f5e9;
+  color: var(--green-mid);
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-weight: 500;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
 .conv-empty {
   padding: 2rem 1rem;
   text-align: center;
