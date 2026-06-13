@@ -1,0 +1,6 @@
+node_modules/
+.env
+server/db/chat.db
+server/credentials/
+uploads/
+*.log

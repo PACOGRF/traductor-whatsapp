@@ -1,0 +1,25 @@
+{
+  "name": "traductor-mensajes-whatsapp",
+  "version": "1.0.0",
+  "description": "Puente de traducción bidireccional entre WhatsApp del huésped y panel del gestor",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "nodemon server/index.js"
+  },
+  "dependencies": {
+    "@google-cloud/translate": "^8.3.0",
+    "bcryptjs": "^2.4.3",
+    "sql.js": "^1.12.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "socket.io": "^4.7.5",
+    "twilio": "^5.3.0",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}

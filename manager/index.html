@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Panel del Gestor — WhatsApp Traductor</title>
+  <link rel="stylesheet" href="manager.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#075e54">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Gestor WA">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ── Sidebar: lista de conversaciones ── -->
+  <aside id="sidebar">
+    <div id="sidebar-header">
+      <div>
+        <h1>Traductor WhatsApp</h1>
+        <div style="font-size:0.75rem;opacity:0.8;">Panel del Gestor</div>
+      </div>
+      <span class="mode-badge" id="mode-badge">DEMO</span>
+    </div>
+    <div id="conv-list">
+      <div class="conv-empty">
+        Aún no hay conversaciones.<br>
+        Usa el panel amarillo de abajo para<br>simular un mensaje de huésped.
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Panel de chat ── -->
+  <main id="chat-panel" class="hidden">
+    <div id="chat-header">
+      <button class="back-btn" id="back-btn" title="Volver">←</button>
+      <div>
+        <div id="chat-guest-name">—</div>
+        <div id="chat-guest-phone"></div>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" id="booking-copy-btn" title="Copiar URL de reservas">🔗</button>
+      </div>
+    </div>
+
+    <div id="messages-area"></div>
+
+    <div id="bottom-bar">
+      <!-- Respuestas rápidas -->
+      <div id="quick-replies-bar"></div>
+      <!-- Input -->
+      <div id="input-row">
+        <textarea id="msg-input" rows="1" placeholder="Escribe en español…"></textarea>
+        <button id="send-btn" title="Enviar">➤</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ── Pantalla de bienvenida ── -->
+  <div id="welcome-screen">
+    <div class="icon">💬</div>
+    <p>Selecciona una conversación de la lista o envía un mensaje de demo para empezar.</p>
+  </div>
+
+</div>
+
+<!-- Demo: simular mensaje de huésped -->
+<details id="demo-panel">
+  <summary>🧪 MODO DEMO — Simular mensaje de huésped</summary>
+  <div id="demo-form">
+    <input id="demo-phone" type="text" placeholder="Teléfono (ej: +447911123456)" value="+447911123456">
+    <input id="demo-name"  type="text" placeholder="Nombre del huésped" value="John Smith">
+    <input id="demo-text"  type="text" placeholder="Mensaje en inglés…" value="Hi, I can't open the door">
+    <button id="demo-send-btn">Enviar →</button>
+  </div>
+</details>
+
+<!-- Botón flotante de copia de URL -->
+<button id="booking-btn" title="Copiar URL de reservas">
+  🔗 Copiar enlace reservas
+</button>
+
+<!-- Botón de activar notificaciones -->
+<button id="notif-btn" title="Activar notificaciones push" style="
+  position:fixed; top:12px; right:12px; z-index:200;
+  background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.4);
+  color:white; border-radius:20px; padding:5px 12px; font-size:0.78rem;
+  cursor:pointer; display:none; backdrop-filter:blur(4px);
+">🔔 Activar avisos</button>
+
+<!-- Toast de notificaciones -->
+<div id="toast"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="manager.js"></script>
+<script>
+// ── Registro del Service Worker y notificaciones push ──
+(async () => {
+  if (!('serviceWorker' in navigator)) return;
+
+  const reg = await navigator.serviceWorker.register('/sw.js');
+  const notifBtn = document.getElementById('notif-btn');
+
+  // Obtener la clave pública VAPID del servidor
+  const { key: vapidKey } = await fetch('/api/vapid-public-key').then(r => r.json());
+  if (!vapidKey) return;
+
+  function urlBase64ToUint8Array(base64) {
+    const pad = '='.repeat((4 - base64.length % 4) % 4);
+    const raw = atob((base64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+  }
+
+  async function subscribe() {
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidKey),
+    });
+    await fetch('/api/push-subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sub),
+    });
+    notifBtn.textContent = '🔔 Avisos activados';
+    notifBtn.style.background = 'rgba(37,211,102,0.3)';
+  }
+
+  // Comprobar estado actual de permisos
+  const existing = await reg.pushManager.getSubscription();
+  if (existing) {
+    // Ya suscrito: re-registrar en el servidor por si el servidor reinició
+    await fetch('/api/push-subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(existing),
+    });
+    notifBtn.style.display = 'block';
+    notifBtn.textContent = '🔔 Avisos activados';
+    notifBtn.style.background = 'rgba(37,211,102,0.3)';
+  } else if (Notification.permission === 'default') {
+    notifBtn.style.display = 'block';
+  }
+
+  notifBtn.addEventListener('click', async () => {
+    const perm = await Notification.requestPermission();
+    if (perm === 'granted') await subscribe();
+    else notifBtn.textContent = '🔕 Permiso denegado';
+  });
+})();
+</script>
+</body>
+</html>

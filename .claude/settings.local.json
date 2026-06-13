@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Invoke-RestMethod http://localhost:3000/health)",
+      "mcp__Claude_Preview__preview_start"
+    ]
+  }
+}
