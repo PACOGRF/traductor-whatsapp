@@ -1,44 +1,56 @@
-const DEMO_MODE = !process.env.GOOGLE_APPLICATION_CREDENTIALS ||
-  process.env.NODE_ENV === 'development' && !require('fs').existsSync(
-    process.env.GOOGLE_APPLICATION_CREDENTIALS || ''
-  );
+const https = require('https');
+
+const API_KEY = process.env.GOOGLE_TRANSLATE_API_KEY;
+const DEMO_MODE = !API_KEY;
+
+function googleRequest(body) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(body);
+    const options = {
+      hostname: 'translation.googleapis.com',
+      path: `/language/translate/v2?key=${API_KEY}`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+    };
+    const req = https.request(options, res => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => {
+        try { resolve(JSON.parse(body)); }
+        catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.write(data);
+    req.end();
+  });
+}
 
 async function detectLanguage(text) {
-  if (DEMO_MODE) {
-    // Detección muy básica por palabras clave para el modo demo
-    const lower = text.toLowerCase();
-    if (/\b(the|is|are|can|door|hello|hi|help|room|wifi|code)\b/.test(lower)) return 'en';
-    if (/\b(le|la|les|bonjour|merci|chambre|porte|wifi)\b/.test(lower)) return 'fr';
-    if (/\b(der|die|das|hallo|bitte|danke|zimmer|tür)\b/.test(lower)) return 'de';
-    return 'en';
-  }
-
-  const { TranslationServiceClient } = require('@google-cloud/translate').v3;
-  const client = new TranslationServiceClient();
-  const [response] = await client.detectLanguage({
-    parent: `projects/${process.env.GOOGLE_PROJECT_ID}/locations/global`,
-    content: text,
-  });
-  return response.languages[0].languageCode;
+  if (DEMO_MODE) return detectDemo(text);
+  const res = await googleRequest({ q: text });
+  return res.data?.detections?.[0]?.[0]?.language || 'en';
 }
 
 async function translate(text, targetLang, sourceLang = null) {
   if (DEMO_MODE) {
-    if (targetLang === 'es') {
-      return `⚠️ [Sin traducción real en modo DEMO] ${text}`;
-    }
-    return `⚠️ [No real translation in DEMO mode] ${text}`;
+    return targetLang === 'es'
+      ? `⚠️ [Sin traducción real en modo DEMO] ${text}`
+      : `⚠️ [No real translation in DEMO mode] ${text}`;
   }
+  const body = { q: text, target: targetLang, format: 'text' };
+  if (sourceLang) body.source = sourceLang;
+  const res = await googleRequest(body);
+  return res.data?.translations?.[0]?.translatedText || text;
+}
 
-  const { TranslationServiceClient } = require('@google-cloud/translate').v3;
-  const client = new TranslationServiceClient();
-  const [response] = await client.translateText({
-    parent: `projects/${process.env.GOOGLE_PROJECT_ID}/locations/global`,
-    contents: [text],
-    targetLanguageCode: targetLang,
-    ...(sourceLang && { sourceLanguageCode: sourceLang }),
-  });
-  return response.translations[0].translatedText;
+// Detección básica para modo demo
+function detectDemo(text) {
+  const lower = text.toLowerCase();
+  if (/\b(the|is|are|can|door|hello|hi|help|room|wifi|code)\b/.test(lower)) return 'en';
+  if (/\b(le|la|les|bonjour|merci|chambre|porte)\b/.test(lower)) return 'fr';
+  if (/\b(der|die|das|hallo|bitte|danke|zimmer)\b/.test(lower)) return 'de';
+  return 'en';
 }
 
 module.exports = { detectLanguage, translate, DEMO_MODE };
