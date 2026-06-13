@@ -1,13 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/db');
-const { detectLanguage, translate } = require('../services/translate');
+const { translateWithDetection } = require('../services/translate');
 
 // Twilio envía los mensajes como form-urlencoded
 router.post('/whatsapp', express.urlencoded({ extended: false }), async (req, res) => {
   try {
     const { From, Body, MediaUrl0, MediaContentType0 } = req.body;
-    const guestPhone = From; // ej: "whatsapp:+447911123456"
+    const guestPhone = From;
 
     // Buscar o crear conversación
     let conv = db.get('SELECT * FROM conversations WHERE guest_phone = ?', [guestPhone]);
@@ -16,9 +16,8 @@ router.post('/whatsapp', express.urlencoded({ extended: false }), async (req, re
       conv = db.get('SELECT * FROM conversations WHERE guest_phone = ?', [guestPhone]);
     }
 
-    // Detectar idioma y traducir al español
-    const detectedLang = await detectLanguage(Body || '');
-    const translatedText = await translate(Body || '', 'es', detectedLang);
+    // Traducir al español (Google detecta el idioma origen automáticamente)
+    const { translatedText, detectedLanguage: detectedLang } = await translateWithDetection(Body || '', 'es');
 
     // Guardar idioma del huésped en la conversación
     if (detectedLang && detectedLang !== conv.guest_language) {

@@ -65,7 +65,7 @@ router.delete('/quick-replies/:id', (req, res) => {
 // Crear conversación de demo
 router.post('/demo/message', async (req, res) => {
   const { phone, name, text, language } = req.body;
-  const { detectLanguage, translate } = require('../services/translate');
+  const { translateWithDetection } = require('../services/translate');
 
   let conv = db.get('SELECT * FROM conversations WHERE guest_phone = ?', [phone]);
   if (!conv) {
@@ -76,8 +76,7 @@ router.post('/demo/message', async (req, res) => {
     conv = db.get('SELECT * FROM conversations WHERE guest_phone = ?', [phone]);
   }
 
-  const detectedLang = await detectLanguage(text);
-  const translated = await translate(text, 'es', detectedLang);
+  const { translatedText: translated, detectedLanguage: detectedLang } = await translateWithDetection(text, 'es');
 
   db.run(
     'INSERT INTO messages (conversation_id, direction, original_text, translated_text, language_detected) VALUES (?, ?, ?, ?, ?)',
