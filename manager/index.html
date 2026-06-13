@@ -22,7 +22,10 @@
         <h1>Traductor WhatsApp</h1>
         <div style="font-size:0.75rem;opacity:0.8;">Panel del Gestor</div>
       </div>
-      <span class="mode-badge" id="mode-badge">DEMO</span>
+      <div style="display:flex;align-items:center;gap:0.5rem;">
+        <button id="templates-btn" class="tpl-open-btn">Plantillas</button>
+        <span class="mode-badge" id="mode-badge">DEMO</span>
+      </div>
     </div>
     <div id="conv-list">
       <div class="conv-empty">
@@ -40,9 +43,7 @@
         <div id="chat-guest-name">—</div>
         <div id="chat-guest-phone"></div>
       </div>
-      <div class="header-actions">
-        <button class="icon-btn" id="booking-copy-btn" title="Copiar URL de reservas">🔗</button>
-      </div>
+      <div class="header-actions"></div>
     </div>
 
     <div id="messages-area"></div>
@@ -77,18 +78,29 @@
   </div>
 </details>
 
-<!-- Botón flotante de copia de URL -->
-<button id="booking-btn" title="Copiar URL de reservas">
-  🔗 Copiar enlace reservas
-</button>
-
-<!-- Botón de activar notificaciones -->
+<!-- Botón de notificaciones (aparece si el navegador lo permite) -->
 <button id="notif-btn" title="Activar notificaciones push" style="
-  position:fixed; top:12px; right:12px; z-index:200;
-  background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.4);
-  color:white; border-radius:20px; padding:5px 12px; font-size:0.78rem;
-  cursor:pointer; display:none; backdrop-filter:blur(4px);
+  position:fixed;top:13px;right:1rem;z-index:200;
+  background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.35);
+  color:white;border-radius:20px;padding:4px 12px;font-size:0.78rem;
+  cursor:pointer;display:none;
 ">🔔 Activar avisos</button>
+
+<!-- Panel lateral de plantillas -->
+<div id="templates-panel" class="hidden">
+  <div id="templates-header">
+    <span>💬 Plantillas de respuesta</span>
+    <button id="templates-close">✕</button>
+  </div>
+  <div id="templates-list"></div>
+  <div id="templates-add">
+    <div id="templates-add-title">+ Nueva plantilla</div>
+    <input id="new-tpl-title" type="text" placeholder="Nombre (ej: Código WiFi)" maxlength="40">
+    <textarea id="new-tpl-msg" placeholder="Texto del mensaje en español…" rows="3"></textarea>
+    <button id="new-tpl-save">Guardar plantilla</button>
+  </div>
+</div>
+<div id="templates-overlay" class="hidden"></div>
 
 <!-- Toast de notificaciones -->
 <div id="toast"></div>

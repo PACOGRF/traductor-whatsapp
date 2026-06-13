@@ -40,10 +40,25 @@ router.get('/quick-replies', (req, res) => {
   res.json(rows);
 });
 
-// Actualizar respuesta rápida
+// Crear plantilla nueva
+router.post('/quick-replies', (req, res) => {
+  const { title, message_es } = req.body;
+  if (!title || !message_es) return res.status(400).json({ error: 'Título y mensaje requeridos' });
+  db.run('INSERT INTO quick_replies (title, message_es, sort_order) VALUES (?, ?, (SELECT COALESCE(MAX(sort_order),0)+1 FROM quick_replies))', [title, message_es]);
+  const row = db.get('SELECT * FROM quick_replies ORDER BY id DESC LIMIT 1');
+  res.json(row);
+});
+
+// Actualizar plantilla
 router.put('/quick-replies/:id', (req, res) => {
   const { title, message_es } = req.body;
   db.run('UPDATE quick_replies SET title = ?, message_es = ? WHERE id = ?', [title, message_es, req.params.id]);
+  res.json({ ok: true });
+});
+
+// Eliminar plantilla
+router.delete('/quick-replies/:id', (req, res) => {
+  db.run('DELETE FROM quick_replies WHERE id = ?', [req.params.id]);
   res.json({ ok: true });
 });
 

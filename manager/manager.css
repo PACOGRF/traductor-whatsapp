@@ -356,6 +356,109 @@ body {
 }
 #demo-send-btn:hover { background: #e0a800; }
 
+/* ── Botón "Plantillas" en la cabecera del sidebar ───── */
+.tpl-open-btn {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.35);
+  color: white;
+  border-radius: 20px;
+  padding: 3px 12px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.tpl-open-btn:hover { background: rgba(255,255,255,0.28); }
+
+/* ── Panel de plantillas ──────────────────────────────── */
+#templates-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+  z-index: 300; transition: opacity 0.2s;
+}
+#templates-overlay.hidden { display: none; }
+
+#templates-panel {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: min(380px, 100vw);
+  background: white;
+  z-index: 301;
+  display: flex; flex-direction: column;
+  box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+  transition: transform 0.25s ease;
+}
+#templates-panel.hidden { display: none; }
+
+#templates-header {
+  background: var(--green-dark);
+  color: white;
+  padding: 0 1rem;
+  height: var(--header-h);
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+#templates-close {
+  background: none; border: none; color: white;
+  font-size: 1.1rem; cursor: pointer; padding: 4px 8px;
+  border-radius: 4px;
+}
+#templates-close:hover { background: rgba(255,255,255,0.15); }
+
+#templates-list {
+  flex: 1; overflow-y: auto; padding: 0.5rem;
+}
+
+.tpl-item {
+  border: 1px solid #eee; border-radius: 8px;
+  padding: 0.6rem 0.75rem; margin-bottom: 0.5rem;
+  display: flex; align-items: flex-start; gap: 0.5rem;
+}
+.tpl-item-info { flex: 1; min-width: 0; }
+.tpl-item-title { font-weight: 600; font-size: 0.88rem; color: #111; }
+.tpl-item-msg {
+  font-size: 0.78rem; color: #777;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-top: 2px;
+}
+.tpl-use-btn {
+  background: var(--green-light); color: white;
+  border: none; border-radius: 6px;
+  padding: 4px 10px; font-size: 0.78rem;
+  cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  align-self: center;
+}
+.tpl-use-btn:hover { background: var(--green-mid); }
+.tpl-del-btn {
+  background: none; border: none; color: #ccc;
+  font-size: 1rem; cursor: pointer; padding: 2px 4px;
+  align-self: center; flex-shrink: 0;
+}
+.tpl-del-btn:hover { color: #e53935; }
+
+#templates-add {
+  border-top: 1px solid #eee;
+  padding: 0.75rem;
+  flex-shrink: 0;
+  background: #fafafa;
+}
+#templates-add-title {
+  font-weight: 600; font-size: 0.85rem; color: #444;
+  margin-bottom: 0.5rem;
+}
+#new-tpl-title, #new-tpl-msg {
+  width: 100%; border: 1px solid #ddd; border-radius: 6px;
+  padding: 7px 10px; font-size: 0.85rem; font-family: inherit;
+  margin-bottom: 0.4rem; outline: none;
+}
+#new-tpl-title:focus, #new-tpl-msg:focus { border-color: var(--green-mid); }
+#new-tpl-msg { resize: vertical; }
+#new-tpl-save {
+  width: 100%; background: var(--green-dark); color: white;
+  border: none; border-radius: 6px; padding: 8px;
+  font-size: 0.88rem; cursor: pointer; font-weight: 600;
+}
+#new-tpl-save:hover { background: var(--green-mid); }
+
 /* ── Toast de notificación ────────────────────────────── */
 #toast {
   position: fixed;

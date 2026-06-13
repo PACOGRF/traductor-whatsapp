@@ -19,7 +19,6 @@ const welcomeScreen  = $('welcome-screen');
 const modeBadge      = $('mode-badge');
 const chatGuestName  = $('chat-guest-name');
 const chatGuestPhone = $('chat-guest-phone');
-const bookingBtn     = $('booking-btn');
 const backBtn        = $('back-btn');
 const toast          = $('toast');
 
@@ -31,7 +30,11 @@ socket.on('new_message', ({ conversation, message }) => {
   const existing = state.conversations.find(c => c.id === conversation.id);
   if (existing) {
     Object.assign(existing, conversation);
+    existing.last_message = message.translated_text || message.original_text;
+    existing.last_message_at = message.created_at;
   } else {
+    conversation.last_message = message.translated_text || message.original_text;
+    conversation.last_message_at = message.created_at;
     state.conversations.unshift(conversation);
   }
   renderConvList();
@@ -235,23 +238,79 @@ $('demo-send-btn').addEventListener('click', async () => {
   if (res) showToast('Mensaje de demo enviado ✓');
 });
 
-/* ── Copiar URL de reservas ─────────────────────────── */
-function copyBookingUrl() {
-  const url = '__BOOKING_URL__'; // se reemplaza por el valor real del servidor
-  fetch('/api/booking-url').then(r => r.json()).then(data => {
-    navigator.clipboard.writeText(data.url || location.origin).then(() => {
-      showToast('URL de reservas copiada ✓');
-      bookingBtn.classList.add('copied');
-      setTimeout(() => bookingBtn.classList.remove('copied'), 2000);
+/* ── Panel de plantillas ────────────────────────────── */
+const templatesPanel   = $('templates-panel');
+const templatesOverlay = $('templates-overlay');
+
+function openTemplates() {
+  templatesPanel.classList.remove('hidden');
+  templatesOverlay.classList.remove('hidden');
+  renderTemplatesPanel();
+}
+function closeTemplates() {
+  templatesPanel.classList.add('hidden');
+  templatesOverlay.classList.add('hidden');
+}
+
+$('templates-btn').addEventListener('click', openTemplates);
+$('templates-close').addEventListener('click', closeTemplates);
+$('templates-overlay').addEventListener('click', closeTemplates);
+
+function renderTemplatesPanel() {
+  const list = $('templates-list');
+  if (state.quickReplies.length === 0) {
+    list.innerHTML = '<div style="padding:1rem;color:#aaa;text-align:center;">No hay plantillas aún</div>';
+    return;
+  }
+  list.innerHTML = state.quickReplies.map(qr => `
+    <div class="tpl-item">
+      <div class="tpl-item-info">
+        <div class="tpl-item-title">${esc(qr.title)}</div>
+        <div class="tpl-item-msg">${esc(qr.message_es)}</div>
+      </div>
+      <button class="tpl-use-btn" data-msg="${esc(qr.message_es)}">Usar</button>
+      <button class="tpl-del-btn" data-id="${qr.id}" title="Eliminar">✕</button>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.tpl-use-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      msgInput.value = btn.dataset.msg;
+      msgInput.focus();
+      autoResize();
+      closeTemplates();
     });
-  }).catch(() => {
-    navigator.clipboard.writeText(location.origin);
-    showToast('URL copiada ✓');
+  });
+
+  list.querySelectorAll('.tpl-del-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('¿Eliminar esta plantilla?')) return;
+      await apiFetch(`/api/quick-replies/${btn.dataset.id}`, { method: 'DELETE' });
+      state.quickReplies = state.quickReplies.filter(qr => qr.id !== Number(btn.dataset.id));
+      renderQuickReplies();
+      renderTemplatesPanel();
+    });
   });
 }
 
-bookingBtn.addEventListener('click', copyBookingUrl);
-$('booking-copy-btn').addEventListener('click', copyBookingUrl);
+$('new-tpl-save').addEventListener('click', async () => {
+  const title = $('new-tpl-title').value.trim();
+  const message_es = $('new-tpl-msg').value.trim();
+  if (!title || !message_es) return showToast('Rellena el nombre y el mensaje');
+  const newQr = await apiFetch('/api/quick-replies', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, message_es }),
+  });
+  if (newQr) {
+    state.quickReplies.push(newQr);
+    renderQuickReplies();
+    renderTemplatesPanel();
+    $('new-tpl-title').value = '';
+    $('new-tpl-msg').value = '';
+    showToast('Plantilla guardada ✓');
+  }
+});
 
 /* ── Volver al sidebar en móvil ─────────────────────── */
 backBtn.addEventListener('click', () => {
