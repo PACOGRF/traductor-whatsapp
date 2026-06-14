@@ -1,7 +1,7 @@
 {
-  "name": "Panel Gestor WhatsApp",
-  "short_name": "Gestor WA",
-  "description": "Panel de traducción de mensajes WhatsApp para apartamentos turísticos",
+  "name": "ChatLink",
+  "short_name": "ChatLink",
+  "description": "Puente de traducción bidireccional para WhatsApp — ChatLink",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#075e54",
