@@ -298,6 +298,20 @@ body {
   font-family: inherit;
 }
 
+#lang-override {
+  border: 1px solid #ddd;
+  border-radius: 16px;
+  padding: 6px 8px;
+  font-size: 0.78rem;
+  background: white;
+  color: var(--green-mid);
+  outline: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  max-width: 110px;
+}
+#lang-override:focus { border-color: var(--green-mid); }
+
 #send-btn {
   background: var(--green-light);
   border: none;

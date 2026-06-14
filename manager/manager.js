@@ -224,7 +224,8 @@ async function sendReply() {
   msgInput.value = '';
   autoResize();
 
-  socket.emit('manager_reply', { conversationId: state.activeConvId, text });
+  const langOverride = document.getElementById('lang-override').value;
+  socket.emit('manager_reply', { conversationId: state.activeConvId, text, langOverride });
   sendBtn.disabled = false;
   msgInput.focus();
 }

@@ -27,14 +27,19 @@ function registerChatHandlers(io, app) {
 
     // El gestor envía una respuesta a un huésped
     socket.on('manager_reply', async (data) => {
-      const { conversationId, text } = data;
+      const { conversationId, text, langOverride } = data;
 
       try {
         const conv = db.get('SELECT * FROM conversations WHERE id = ?', [conversationId]);
         if (!conv) return socket.emit('error', { msg: 'Conversación no encontrada' });
 
-        const guestLang = conv.guest_language || 'en';
-        const translatedText = await translate(text, guestLang, 'es');
+        let translatedText;
+        if (langOverride === 'none') {
+          translatedText = text; // enviar tal cual, sin traducir
+        } else {
+          const targetLang = (langOverride && langOverride !== 'auto') ? langOverride : (conv.guest_language || 'en');
+          translatedText = await translate(text, targetLang, 'es');
+        }
 
         // Guardar mensaje saliente
         db.run(
