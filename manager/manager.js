@@ -134,7 +134,7 @@ function renderMessages() {
 
   let lastDate = null;
   messagesArea.innerHTML = state.messages.map(m => {
-    const msgDate  = new Date(m.created_at);
+    const msgDate  = new Date(m.created_at.endsWith('Z') ? m.created_at : m.created_at + 'Z');
     const dateStr  = msgDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
     let dateDivider = '';
     if (dateStr !== lastDate) {
@@ -385,7 +385,7 @@ function truncate(str, n) {
 }
 
 function formatTime(iso) {
-  const d = new Date(iso);
+  const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
   const now = new Date();
   const isToday = d.toDateString() === now.toDateString();
   return isToday
