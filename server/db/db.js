@@ -1,59 +1,44 @@
-const initSqlJs = require('sql.js');
+const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
-const DB_PATH = path.resolve(process.env.DB_PATH || './server/db/chat.db');
-const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
-
-let db = null;
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('render.com')
+    ? { rejectUnauthorized: false }
+    : false,
+});
 
 async function getDb() {
-  if (db) return db;
-
-  const SQL = await initSqlJs();
-
-  if (fs.existsSync(DB_PATH)) {
-    const fileBuffer = fs.readFileSync(DB_PATH);
-    db = new SQL.Database(fileBuffer);
-  } else {
-    db = new SQL.Database();
-  }
-
-  const schema = fs.readFileSync(SCHEMA_PATH, 'utf8');
-  db.run(schema);
-  save();
-
-  return db;
+  const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
+  await pool.query(schema);
+  return pool;
 }
 
-function save() {
-  if (!db) return;
-  const data = db.export();
-  const buffer = Buffer.from(data);
-  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-  fs.writeFileSync(DB_PATH, buffer);
+// Ejecuta una consulta de escritura (INSERT, UPDATE, DELETE)
+// Convierte ? a $1, $2, ... para compatibilidad con el código existente
+async function run(sql, params = []) {
+  const pgSql = toPgParams(sql);
+  await pool.query(pgSql, params);
 }
 
-// Wrapper que ejecuta una consulta y guarda automáticamente si hay cambios
-function run(sql, params = []) {
-  db.run(sql, params);
-  save();
+// Devuelve todas las filas como array de objetos
+async function all(sql, params = []) {
+  const pgSql = toPgParams(sql);
+  const result = await pool.query(pgSql, params);
+  return result.rows;
 }
 
-function all(sql, params = []) {
-  const stmt = db.prepare(sql);
-  stmt.bind(params);
-  const rows = [];
-  while (stmt.step()) {
-    rows.push(stmt.getAsObject());
-  }
-  stmt.free();
-  return rows;
-}
-
-function get(sql, params = []) {
-  const rows = all(sql, params);
+// Devuelve solo la primera fila
+async function get(sql, params = []) {
+  const rows = await all(sql, params);
   return rows[0] || null;
 }
 
-module.exports = { getDb, run, get, all, save };
+// Convierte placeholders ? estilo SQLite a $1, $2, ... estilo PostgreSQL
+function toPgParams(sql) {
+  let i = 0;
+  return sql.replace(/\?/g, () => `$${++i}`);
+}
+
+module.exports = { getDb, run, get, all };

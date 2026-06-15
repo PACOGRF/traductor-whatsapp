@@ -35,12 +35,17 @@ async function translateWithDetection(text, targetLang) {
     };
   }
 
-  // Paso 1: detectar idioma explícitamente
+  // Paso 1: detectar idioma
   const detectRes = await googleRequest('/language/translate/v2/detect', { q: text });
   const detectedLanguage = detectRes.data?.detections?.[0]?.[0]?.language || 'en';
   console.log(`[Translate] Texto: "${text}" → Idioma detectado: ${detectedLanguage}`);
 
-  // Paso 2: traducir especificando el idioma origen (más fiable)
+  // Paso 2: si ya está en el idioma destino, no traducir
+  if (detectedLanguage === targetLang) {
+    console.log(`[Translate] Mismo idioma que destino (${targetLang}), sin traducción`);
+    return { translatedText: text, detectedLanguage };
+  }
+
   const translateRes = await googleRequest('/language/translate/v2', {
     q: text, target: targetLang, source: detectedLanguage, format: 'text'
   });

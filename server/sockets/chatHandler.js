@@ -16,7 +16,7 @@ async function sendPushNotification(app, payload) {
   try {
     await webpush.sendNotification(subscription, JSON.stringify(payload));
   } catch (err) {
-    if (err.statusCode === 410) app.set('pushSubscription', null); // suscripción caducada
+    if (err.statusCode === 410) app.set('pushSubscription', null);
     else console.error('Error push:', err.message);
   }
 }
@@ -25,41 +25,36 @@ function registerChatHandlers(io, app) {
   io.on('connection', (socket) => {
     console.log('Panel del gestor conectado:', socket.id);
 
-    // El gestor envía una respuesta a un huésped
     socket.on('manager_reply', async (data) => {
       const { conversationId, text, langOverride } = data;
 
       try {
-        const conv = db.get('SELECT * FROM conversations WHERE id = ?', [conversationId]);
+        const conv = await db.get('SELECT * FROM conversations WHERE id = ?', [conversationId]);
         if (!conv) return socket.emit('error', { msg: 'Conversación no encontrada' });
 
         let translatedText;
         if (langOverride === 'none') {
-          translatedText = text; // enviar tal cual, sin traducir
+          translatedText = text;
         } else {
           const targetLang = (langOverride && langOverride !== 'auto') ? langOverride : (conv.guest_language || 'en');
           translatedText = await translate(text, targetLang, 'es');
         }
 
-        // Guardar mensaje saliente
-        db.run(
+        await db.run(
           'INSERT INTO messages (conversation_id, direction, original_text, translated_text, language_detected) VALUES (?, ?, ?, ?, ?)',
           [conversationId, 'outgoing', text, translatedText, 'es']
         );
 
-        const msg = db.get('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1', [conversationId]);
+        const msg = await db.get('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1', [conversationId]);
 
-        // Emitir a todos los paneles conectados (para sincronizar múltiples dispositivos)
         io.emit('message_sent', { conversation: conv, message: msg });
 
-        // Push al gestor si el panel no está abierto
         sendPushNotification(app, {
           title: `Respuesta enviada a ${conv.guest_name || conv.guest_phone}`,
           body: msg.translated_text || msg.original_text,
           phone: conv.guest_phone,
         });
 
-        // Enviar por WhatsApp si Twilio está configurado
         if (process.env.TWILIO_ACCOUNT_SID && !process.env.TWILIO_ACCOUNT_SID.includes('xxx')) {
           const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
           await twilio.messages.create({
