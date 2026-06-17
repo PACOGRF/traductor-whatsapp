@@ -473,6 +473,25 @@ function formatTime(iso) {
     : d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
 }
 
+/* ── Tareas pendientes: navegación móvil ────────────── */
+const tasksMobileBtn = $('tasks-mobile-btn');
+const tasksBackBtn   = $('tasks-back-btn');
+const tasksPanel     = $('tasks-panel');
+
+if (tasksMobileBtn) {
+  tasksMobileBtn.addEventListener('click', () => {
+    sidebar.classList.add('hidden');
+    tasksPanel.classList.add('mobile-visible');
+  });
+}
+
+if (tasksBackBtn) {
+  tasksBackBtn.addEventListener('click', () => {
+    tasksPanel.classList.remove('mobile-visible');
+    sidebar.classList.remove('hidden');
+  });
+}
+
 /* ── Arrancar ───────────────────────────────────────── */
 // Ocultar messages-area hasta que se seleccione conversación
 messagesArea.style.display = 'none';
