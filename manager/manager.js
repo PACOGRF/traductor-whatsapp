@@ -510,3 +510,8 @@ if (tasksBackBtn) {
 // Ocultar messages-area hasta que se seleccione conversación
 messagesArea.style.display = 'none';
 init();
+
+// Recargar tareas cuando el usuario vuelve a la pestaña/app
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') loadTasks();
+});
