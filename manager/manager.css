@@ -5,21 +5,28 @@
   --green-dark:   #075e54;
   --green-mid:    #128c7e;
   --green-light:  #25d366;
-  --bubble-in:    #ffffff;
-  --bubble-out:   #dcf8c6;
-  --bg:           #e5ddd5;
-  --sidebar-bg:   #ffffff;
+  --bubble-in:    #f0f2f0;
+  --bubble-out:   #d4edda;
+  --bg:           #1a3530;
+  --sidebar-bg:   #1e3d37;
+  --panel-bg:     #1e3d37;
+  --item-hover:   #264d45;
+  --item-active:  #2d5a50;
+  --text-main:    #ffffff;
+  --text-sub:     rgba(255,255,255,0.65);
+  --border:       rgba(255,255,255,0.08);
   --header-h:     64px;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 14px;
   background: var(--bg);
   height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  color: var(--text-main);
 }
 
 /* ── Layout: 3 columnas en escritorio ────────────────── */
@@ -34,7 +41,7 @@ body {
 /* ── Sidebar izquierdo (conversaciones) ──────────────── */
 #sidebar {
   background: var(--sidebar-bg);
-  border-right: 1px solid #e0e0e0;
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -70,12 +77,12 @@ body {
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border);
   cursor: pointer;
   transition: background 0.15s;
 }
-.conv-item:hover  { background: #f5f5f5; }
-.conv-item.active { background: #ebebeb; }
+.conv-item:hover  { background: var(--item-hover); }
+.conv-item.active { background: var(--item-active); }
 
 .conv-avatar {
   width: 46px; height: 46px;
@@ -88,9 +95,9 @@ body {
 }
 
 .conv-info { flex: 1; min-width: 0; }
-.conv-name { font-weight: 600; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.conv-preview { color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.85rem; margin-top: 2px; }
-.conv-time { font-size: 0.72rem; color: #aaa; white-space: nowrap; }
+.conv-name { font-weight: 600; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-preview { color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.85rem; margin-top: 2px; }
+.conv-time { font-size: 0.72rem; color: var(--text-sub); white-space: nowrap; }
 
 .conv-lang {
   font-size: 0.65rem;
@@ -106,7 +113,7 @@ body {
 .conv-empty {
   padding: 2rem 1rem;
   text-align: center;
-  color: #aaa;
+  color: var(--text-sub);
   font-size: 0.9rem;
   line-height: 1.6;
 }
@@ -118,7 +125,7 @@ body {
   height: 100%;
   min-width: 0;
   overflow: hidden;
-  border-right: 1px solid #e0e0e0;
+  border-right: 1px solid var(--border);
 }
 
 /* Cabecera del chat: branding ChatLink */
@@ -208,7 +215,7 @@ body {
   align-items: center;
   justify-content: center;
   background: var(--bg);
-  color: #888;
+  color: var(--text-sub);
   gap: 1rem;
   padding: 2rem;
   text-align: center;
@@ -250,7 +257,7 @@ body {
   border-top-right-radius: 0;
 }
 
-.msg-original { font-size: 0.92rem; color: #111; }
+.msg-original { font-size: 0.92rem; color: #1a1a1a; }
 
 .msg-translated {
   font-size: 0.78rem;
@@ -294,8 +301,8 @@ body {
 
 .msg-date-divider { text-align: center; margin: 0.5rem 0; }
 .msg-date-divider span {
-  background: rgba(225,245,254,0.9);
-  color: #555;
+  background: rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.7);
   font-size: 0.75rem;
   padding: 3px 10px;
   border-radius: 8px;
@@ -303,10 +310,10 @@ body {
 
 /* ── Barra inferior ───────────────────────────────────── */
 #bottom-bar {
-  background: #f0f0f0;
+  background: var(--sidebar-bg);
   padding: 0.5rem;
   flex-shrink: 0;
-  border-top: 1px solid #ddd;
+  border-top: 1px solid var(--border);
 }
 
 /* Fila: quick replies + botón PLANTILLAS */
@@ -328,9 +335,9 @@ body {
 
 .qr-btn {
   white-space: nowrap;
-  background: white;
-  border: 1px solid var(--green-mid);
-  color: var(--green-mid);
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.4);
+  color: rgba(255,255,255,0.85);
   padding: 4px 10px;
   border-radius: 16px;
   font-size: 0.78rem;
@@ -338,12 +345,12 @@ body {
   transition: all 0.15s;
   flex-shrink: 0;
 }
-.qr-btn:hover { background: var(--green-mid); color: white; }
+.qr-btn:hover { background: rgba(255,255,255,0.15); color: white; }
 
 .tpl-open-btn {
-  background: rgba(255,255,255,0.15);
-  border: 1px solid var(--green-mid);
-  color: var(--green-mid);
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.4);
+  color: rgba(255,255,255,0.85);
   border-radius: 16px;
   padding: 4px 12px;
   font-size: 0.72rem;
@@ -353,9 +360,8 @@ body {
   white-space: nowrap;
   flex-shrink: 0;
   transition: all 0.15s;
-  background: white;
 }
-.tpl-open-btn:hover { background: var(--green-mid); color: white; }
+.tpl-open-btn:hover { background: rgba(255,255,255,0.15); color: white; }
 
 /* Fila de input */
 #input-row {
@@ -367,31 +373,34 @@ body {
 
 #msg-input {
   flex: 1;
-  border: none;
+  border: 1px solid var(--border);
   border-radius: 20px;
   padding: 10px 14px;
   font-size: 0.95rem;
   outline: none;
   resize: none;
   max-height: 120px;
-  background: white;
+  background: rgba(255,255,255,0.1);
+  color: white;
   line-height: 1.4;
   font-family: inherit;
 }
+#msg-input::placeholder { color: rgba(255,255,255,0.45); }
 
 #lang-override {
-  border: 1px solid #ddd;
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 6px 8px;
   font-size: 0.78rem;
-  background: white;
-  color: var(--green-mid);
+  background: rgba(255,255,255,0.1);
+  color: white;
   outline: none;
   cursor: pointer;
   flex-shrink: 0;
   max-width: 110px;
 }
-#lang-override:focus { border-color: var(--green-mid); }
+#lang-override:focus { border-color: rgba(255,255,255,0.5); }
+#lang-override option { background: #1e3d37; color: white; }
 
 #send-btn {
   background: var(--green-light);
@@ -410,7 +419,7 @@ body {
 
 /* ── Panel derecho: tareas pendientes ────────────────── */
 #tasks-panel {
-  background: var(--sidebar-bg);
+  background: var(--panel-bg);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -448,7 +457,7 @@ body {
 .tasks-empty {
   padding: 2rem 1rem;
   text-align: center;
-  color: #aaa;
+  color: var(--text-sub);
   font-size: 0.85rem;
   line-height: 1.7;
 }
@@ -457,15 +466,16 @@ body {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
-  border: 1px solid #eee;
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 0.6rem 0.75rem;
   margin-bottom: 0.5rem;
+  background: rgba(255,255,255,0.05);
   transition: border-color 0.15s, background 0.15s;
 }
 .task-item.priority-on {
   border-color: #e53935;
-  background: #fff8f8;
+  background: rgba(229,57,53,0.1);
 }
 
 .task-info { flex: 1; min-width: 0; }
@@ -473,7 +483,7 @@ body {
 .task-name {
   font-weight: 600;
   font-size: 0.85rem;
-  color: #111;
+  color: var(--text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -481,13 +491,13 @@ body {
 
 .task-date {
   font-size: 0.7rem;
-  color: #aaa;
+  color: var(--text-sub);
   margin-top: 2px;
 }
 
 .task-text {
   font-size: 0.78rem;
-  color: #666;
+  color: var(--text-sub);
   margin-top: 4px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -630,7 +640,7 @@ body {
 #toast {
   position: fixed;
   top: 1rem; left: 50%; transform: translateX(-50%);
-  background: #333; color: white;
+  background: rgba(0,0,0,0.75); color: white;
   padding: 8px 18px; border-radius: 20px;
   font-size: 0.85rem;
   opacity: 0; pointer-events: none;
