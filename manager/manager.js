@@ -62,7 +62,7 @@ async function init() {
   const health = await apiFetch('/health');
   if (health && health.mode) {
     modeBadge.textContent = health.mode === 'DEMO' ? 'MODO DEMO' : '● EN VIVO';
-    modeBadge.style.background = health.mode === 'DEMO' ? '#ffc107' : '#25d366';
+    modeBadge.style.background = health.mode === 'DEMO' ? '#ffc107' : '#a3b18a';
     modeBadge.style.color = health.mode === 'DEMO' ? '#333' : 'white';
   }
 
