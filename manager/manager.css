@@ -697,6 +697,7 @@ body {
     font-size: 0.78rem;
     cursor: pointer;
     white-space: nowrap;
+    margin-left: auto;
   }
 
   /* Botón volver en tareas (solo móvil) */
