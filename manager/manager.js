@@ -4,6 +4,7 @@ const state = {
   activeConvId: null,
   messages: [],
   quickReplies: [],
+  tasks: JSON.parse(localStorage.getItem('chatlink_tasks') || '[]'),
 };
 
 /* ── Referencias DOM ────────────────────────────────── */
@@ -21,12 +22,12 @@ const chatGuestName  = $('chat-guest-name');
 const chatGuestMeta  = $('chat-guest-meta');
 const backBtn        = $('back-btn');
 const toast          = $('toast');
+const tasksList      = $('tasks-list');
 
 /* ── Socket.io ──────────────────────────────────────── */
 const socket = io();
 
 socket.on('new_message', ({ conversation, message }) => {
-  // Actualizar o añadir la conversación en la lista
   const existing = state.conversations.find(c => c.id === conversation.id);
   if (existing) {
     Object.assign(existing, conversation);
@@ -39,7 +40,6 @@ socket.on('new_message', ({ conversation, message }) => {
   }
   renderConvList();
 
-  // Si es la conversación activa, añadir el mensaje
   if (state.activeConvId === conversation.id) {
     state.messages.push(message);
     renderMessages();
@@ -50,7 +50,6 @@ socket.on('new_message', ({ conversation, message }) => {
 
 socket.on('message_sent', ({ conversation, message }) => {
   if (state.activeConvId === conversation.id) {
-    // Evitar duplicados (puede que ya lo hayamos añadido optimistamente)
     if (!state.messages.find(m => m.id === message.id)) {
       state.messages.push(message);
       renderMessages();
@@ -69,33 +68,30 @@ async function init() {
 
   await loadConversations();
   await loadQuickReplies();
+  renderTasks();
+
+  // En escritorio el chat siempre visible; en móvil empieza oculto
+  if (window.innerWidth > 768) {
+    chatPanel.classList.remove('hidden');
+  }
 }
 
 async function loadConversations() {
   const data = await apiFetch('/api/conversations');
-  if (data) {
-    state.conversations = data;
-    renderConvList();
-  }
+  if (data) { state.conversations = data; renderConvList(); }
 }
 
 async function loadQuickReplies() {
   const data = await apiFetch('/api/quick-replies');
-  if (data) {
-    state.quickReplies = data;
-    renderQuickReplies();
-  }
+  if (data) { state.quickReplies = data; renderQuickReplies(); }
 }
 
 async function loadMessages(convId) {
   const data = await apiFetch(`/api/conversations/${convId}/messages`);
-  if (data) {
-    state.messages = data;
-    renderMessages();
-  }
+  if (data) { state.messages = data; renderMessages(); }
 }
 
-/* ── Renderizado ────────────────────────────────────── */
+/* ── Renderizado: lista de conversaciones ───────────── */
 function renderConvList() {
   if (state.conversations.length === 0) {
     convList.innerHTML = `<div class="conv-empty">Aún no hay conversaciones.<br>Usa el panel amarillo de abajo para<br>simular un mensaje de huésped.</div>`;
@@ -126,6 +122,7 @@ function renderConvList() {
   });
 }
 
+/* ── Renderizado: mensajes ──────────────────────────── */
 function renderMessages() {
   if (state.messages.length === 0) {
     messagesArea.innerHTML = '<div style="text-align:center;color:#aaa;margin-top:2rem;">No hay mensajes aún</div>';
@@ -134,8 +131,8 @@ function renderMessages() {
 
   let lastDate = null;
   messagesArea.innerHTML = state.messages.map(m => {
-    const msgDate  = new Date(m.created_at.endsWith('Z') ? m.created_at : m.created_at + 'Z');
-    const dateStr  = msgDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+    const msgDate = new Date(m.created_at.endsWith('Z') ? m.created_at : m.created_at + 'Z');
+    const dateStr = msgDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
     let dateDivider = '';
     if (dateStr !== lastDate) {
       lastDate = dateStr;
@@ -147,7 +144,6 @@ function renderMessages() {
 
     let mainText, subText;
     if (m.direction === 'incoming') {
-      // Burbuja del huésped: original arriba, etiqueta + traducción abajo
       mainText = esc(m.original_text);
       const label = m.language_detected
         ? `Traducido del <strong>${langName(m.language_detected)}</strong> al español`
@@ -158,7 +154,6 @@ function renderMessages() {
           <em>${esc(m.translated_text)}</em>
         </div>` : '';
     } else {
-      // Burbuja del gestor: texto en español arriba, traducción enviada abajo
       mainText = esc(m.original_text);
       const conv = state.conversations.find(c => c.id === m.conversation_id);
       const targetLang = conv ? langName(conv.guest_language) : 'idioma del huésped';
@@ -170,16 +165,28 @@ function renderMessages() {
     }
 
     return `${dateDivider}
-      <div class="msg-bubble ${cls}">
+      <div class="msg-bubble ${cls}" data-msg-id="${m.id}">
+        <button class="msg-pin-btn" data-msg-id="${m.id}" title="Añadir a tareas pendientes">📌</button>
         <div class="msg-original">${mainText}</div>
         ${subText}
         <span class="msg-time">${time}</span>
       </div>`;
   }).join('');
 
+  // Eventos para los botones de pin
+  messagesArea.querySelectorAll('.msg-pin-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const msgId = Number(btn.dataset.msgId);
+      const msg  = state.messages.find(m => m.id === msgId);
+      const conv = state.conversations.find(c => c.id === state.activeConvId);
+      if (msg && conv) addTask(msg, conv);
+    });
+  });
+
   messagesArea.scrollTop = messagesArea.scrollHeight;
 }
 
+/* ── Renderizado: quick replies ─────────────────────── */
 function renderQuickReplies() {
   quickBar.innerHTML = state.quickReplies.map(qr =>
     `<button class="qr-btn" data-msg="${esc(qr.message_es)}" title="${esc(qr.message_es)}">${esc(qr.title)}</button>`
@@ -194,28 +201,100 @@ function renderQuickReplies() {
   });
 }
 
+/* ── Tareas pendientes ──────────────────────────────── */
+function saveTasks() {
+  localStorage.setItem('chatlink_tasks', JSON.stringify(state.tasks));
+}
+
+function addTask(msg, conv) {
+  if (state.tasks.find(t => t.msgId === msg.id)) {
+    showToast('Este mensaje ya está en tareas pendientes');
+    return;
+  }
+  state.tasks.unshift({
+    id: Date.now(),
+    msgId: msg.id,
+    guestName: conv.guest_name || conv.guest_phone,
+    createdAt: msg.created_at,
+    text: msg.original_text || msg.translated_text || '',
+    priority: false,
+  });
+  saveTasks();
+  renderTasks();
+  showToast('Añadido a tareas pendientes 📌');
+}
+
+function removeTask(id) {
+  state.tasks = state.tasks.filter(t => t.id !== id);
+  saveTasks();
+  renderTasks();
+}
+
+function togglePriority(id) {
+  const task = state.tasks.find(t => t.id === id);
+  if (task) { task.priority = !task.priority; saveTasks(); renderTasks(); }
+}
+
+function renderTasks() {
+  if (!tasksList) return;
+  if (state.tasks.length === 0) {
+    tasksList.innerHTML = '<div class="tasks-empty">Sin tareas pendientes.<br>Usa 📌 en los mensajes para añadir.</div>';
+    return;
+  }
+
+  tasksList.innerHTML = state.tasks.map(t => {
+    const date = formatTime(t.createdAt);
+    const text = t.text && t.text.length > 80 ? t.text.slice(0, 80) + '…' : (t.text || '');
+    const pClass = t.priority ? 'priority-on' : '';
+    return `
+      <div class="task-item ${pClass}">
+        <div class="task-info">
+          <div class="task-name">${esc(t.guestName)}</div>
+          <div class="task-date">${date}</div>
+          <div class="task-text">${esc(text)}</div>
+        </div>
+        <div class="task-estado">
+          <button class="task-priority-btn ${pClass}" data-id="${t.id}" title="Marcar prioridad"></button>
+          <button class="task-del-btn" data-id="${t.id}" title="Eliminar tarea">🗑</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  tasksList.querySelectorAll('.task-priority-btn').forEach(btn =>
+    btn.addEventListener('click', () => togglePriority(Number(btn.dataset.id)))
+  );
+  tasksList.querySelectorAll('.task-del-btn').forEach(btn =>
+    btn.addEventListener('click', () => removeTask(Number(btn.dataset.id)))
+  );
+}
+
 /* ── Seleccionar conversación ───────────────────────── */
 async function selectConversation(id) {
   state.activeConvId = id;
   const conv = state.conversations.find(c => c.id === id);
   if (!conv) return;
 
+  // Actualizar cabecera
   chatGuestName.textContent = conv.guest_name || conv.guest_phone;
-  const langLabel = conv.guest_language && conv.guest_language !== 'es'
+  chatGuestMeta.textContent = conv.guest_language && conv.guest_language !== 'es'
     ? `${conv.guest_phone} · habla ${langName(conv.guest_language)}`
     : conv.guest_phone;
-  chatGuestMeta.textContent = langLabel;
+
+  // Mostrar chat, ocultar bienvenida
+  welcomeScreen.style.display = 'none';
+  messagesArea.style.display  = 'flex';
 
   // Móvil: ocultar sidebar, mostrar chat
-  sidebar.classList.add('hidden');
-  chatPanel.classList.remove('hidden');
-  welcomeScreen.style.display = 'none';
+  if (window.innerWidth <= 768) {
+    sidebar.classList.add('hidden');
+    chatPanel.classList.remove('hidden');
+  }
 
-  renderConvList(); // resalta la activa
+  renderConvList();
   await loadMessages(id);
 }
 
-/* ── Enviar respuesta del gestor ────────────────────── */
+/* ── Enviar respuesta ───────────────────────────────── */
 async function sendReply() {
   const text = msgInput.value.trim();
   if (!text || !state.activeConvId) return;
@@ -224,13 +303,13 @@ async function sendReply() {
   msgInput.value = '';
   autoResize();
 
-  const langOverride = document.getElementById('lang-override').value;
+  const langOverride = $('lang-override').value;
   socket.emit('manager_reply', { conversationId: state.activeConvId, text, langOverride });
   sendBtn.disabled = false;
   msgInput.focus();
 }
 
-/* ── Demo: simular mensaje de huésped ───────────────── */
+/* ── Demo ───────────────────────────────────────────── */
 $('demo-send-btn').addEventListener('click', async () => {
   const phone = $('demo-phone').value.trim() || '+447911123456';
   const name  = $('demo-name').value.trim()  || 'Huésped Demo';
@@ -301,7 +380,7 @@ function renderTemplatesPanel() {
 }
 
 $('new-tpl-save').addEventListener('click', async () => {
-  const title = $('new-tpl-title').value.trim();
+  const title      = $('new-tpl-title').value.trim();
   const message_es = $('new-tpl-msg').value.trim();
   if (!title || !message_es) return showToast('Rellena el nombre y el mensaje');
   const newQr = await apiFetch('/api/quick-replies', {
@@ -319,20 +398,23 @@ $('new-tpl-save').addEventListener('click', async () => {
   }
 });
 
-/* ── Volver al sidebar en móvil ─────────────────────── */
+/* ── Botón volver (móvil) ───────────────────────────── */
 backBtn.addEventListener('click', () => {
-  chatPanel.classList.add('hidden');
-  sidebar.classList.remove('hidden');
+  if (window.innerWidth <= 768) {
+    chatPanel.classList.add('hidden');
+    sidebar.classList.remove('hidden');
+  }
   welcomeScreen.style.display = 'flex';
+  messagesArea.style.display  = 'none';
+  chatGuestName.textContent   = 'Panel del Gestor';
+  chatGuestMeta.textContent   = '';
   state.activeConvId = null;
+  renderConvList();
 });
 
-/* ── Input: enviar con Enter (Shift+Enter = nueva línea) */
+/* ── Input ──────────────────────────────────────────── */
 msgInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendReply();
-  }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendReply(); }
 });
 msgInput.addEventListener('input', autoResize);
 sendBtn.addEventListener('click', sendReply);
@@ -350,9 +432,7 @@ const LANG_NAMES = {
   sv: 'sueco', da: 'danés', fi: 'finlandés', nb: 'noruego',
   cs: 'checo', ro: 'rumano', tr: 'turco', uk: 'ucraniano',
 };
-function langName(code) {
-  return LANG_NAMES[code] || code || 'idioma desconocido';
-}
+function langName(code) { return LANG_NAMES[code] || code || 'idioma desconocido'; }
 
 /* ── Utilidades ─────────────────────────────────────── */
 async function apiFetch(url, options) {
@@ -375,10 +455,8 @@ function showToast(msg, duration = 2500) {
 function esc(str) {
   if (!str) return '';
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function truncate(str, n) {
@@ -395,4 +473,6 @@ function formatTime(iso) {
 }
 
 /* ── Arrancar ───────────────────────────────────────── */
+// Ocultar messages-area hasta que se seleccione conversación
+messagesArea.style.display = 'none';
 init();

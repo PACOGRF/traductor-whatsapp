@@ -15,17 +15,10 @@
 
 <div id="app">
 
-  <!-- ── Sidebar: lista de conversaciones ── -->
+  <!-- ── Columna izquierda: lista de conversaciones (25%) ── -->
   <aside id="sidebar">
     <div id="sidebar-header">
-      <div>
-        <h1>Traductor WhatsApp</h1>
-        <div style="font-size:0.75rem;opacity:0.8;">Panel del Gestor</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:0.5rem;">
-        <button id="templates-btn" class="tpl-open-btn">Plantillas</button>
-        <span class="mode-badge" id="mode-badge">DEMO</span>
-      </div>
+      <span class="sidebar-logo">💬</span>
     </div>
     <div id="conv-list">
       <div class="conv-empty">
@@ -35,23 +28,35 @@
     </div>
   </aside>
 
-  <!-- ── Panel de chat ── -->
-  <main id="chat-panel" class="hidden">
+  <!-- ── Columna central: chat (50%) ── -->
+  <main id="chat-panel">
     <div id="chat-header">
       <button class="back-btn" id="back-btn" title="Volver">←</button>
-      <div>
-        <div id="chat-guest-name">—</div>
+      <div id="chat-brand">
+        <div id="chat-brand-name">ChatLink</div>
+        <div id="chat-guest-name">Panel del Gestor</div>
         <div id="chat-guest-meta"></div>
       </div>
-      <div class="header-actions"></div>
+      <div class="header-actions">
+        <span class="mode-badge" id="mode-badge">DEMO</span>
+      </div>
     </div>
 
+    <!-- Pantalla de bienvenida (sin conversación seleccionada) -->
+    <div id="welcome-screen">
+      <div class="icon">💬</div>
+      <p>Selecciona una conversación de la lista o envía un mensaje de demo para empezar.</p>
+    </div>
+
+    <!-- Área de mensajes -->
     <div id="messages-area"></div>
 
+    <!-- Barra inferior -->
     <div id="bottom-bar">
-      <!-- Respuestas rápidas -->
-      <div id="quick-replies-bar"></div>
-      <!-- Input -->
+      <div id="quick-bar-row">
+        <div id="quick-replies-bar"></div>
+        <button id="templates-btn" class="tpl-open-btn">PLANTILLAS</button>
+      </div>
       <div id="input-row">
         <textarea id="msg-input" rows="1" placeholder="Escribe en español…"></textarea>
         <select id="lang-override" title="Idioma de envío">
@@ -76,11 +81,16 @@
     </div>
   </main>
 
-  <!-- ── Pantalla de bienvenida ── -->
-  <div id="welcome-screen">
-    <div class="icon">💬</div>
-    <p>Selecciona una conversación de la lista o envía un mensaje de demo para empezar.</p>
-  </div>
+  <!-- ── Columna derecha: tareas pendientes (25%) ── -->
+  <aside id="tasks-panel">
+    <div id="tasks-header">
+      <span>TAREAS PENDIENTES</span>
+      <span id="tasks-estado-label">ESTADO</span>
+    </div>
+    <div id="tasks-list">
+      <div class="tasks-empty">Sin tareas pendientes.<br>Usa 📌 en los mensajes para añadir.</div>
+    </div>
+  </aside>
 
 </div>
 
@@ -95,7 +105,7 @@
   </div>
 </details>
 
-<!-- Botón de notificaciones (aparece si el navegador lo permite) -->
+<!-- Botón de notificaciones -->
 <button id="notif-btn" title="Activar notificaciones push" style="
   position:fixed;top:13px;right:1rem;z-index:200;
   background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.35);
@@ -119,20 +129,16 @@
 </div>
 <div id="templates-overlay" class="hidden"></div>
 
-<!-- Toast de notificaciones -->
+<!-- Toast -->
 <div id="toast"></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="manager.js"></script>
 <script>
-// ── Registro del Service Worker y notificaciones push ──
 (async () => {
   if (!('serviceWorker' in navigator)) return;
-
   const reg = await navigator.serviceWorker.register('/sw.js');
   const notifBtn = document.getElementById('notif-btn');
-
-  // Obtener la clave pública VAPID del servidor
   const { key: vapidKey } = await fetch('/api/vapid-public-key').then(r => r.json());
   if (!vapidKey) return;
 
@@ -156,10 +162,8 @@
     notifBtn.style.background = 'rgba(37,211,102,0.3)';
   }
 
-  // Comprobar estado actual de permisos
   const existing = await reg.pushManager.getSubscription();
   if (existing) {
-    // Ya suscrito: re-registrar en el servidor por si el servidor reinició
     await fetch('/api/push-subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -9,8 +9,7 @@
   --bubble-out:   #dcf8c6;
   --bg:           #e5ddd5;
   --sidebar-bg:   #ffffff;
-  --header-h:     56px;
-  --sidebar-w:    340px;
+  --header-h:     64px;
 }
 
 body {
@@ -23,46 +22,37 @@ body {
   overflow: hidden;
 }
 
-/* ── Layout principal ─────────────────────────────────── */
+/* ── Layout: 3 columnas en escritorio ────────────────── */
 #app {
-  display: flex;
-  flex: 1;
+  display: grid;
+  grid-template-columns: 25% 50% 25%;
+  grid-template-rows: 1fr;
   height: 100dvh;
   overflow: hidden;
 }
 
-/* ── Sidebar (lista de conversaciones) ───────────────── */
+/* ── Sidebar izquierdo (conversaciones) ──────────────── */
 #sidebar {
-  width: var(--sidebar-w);
-  min-width: var(--sidebar-w);
   background: var(--sidebar-bg);
   border-right: 1px solid #e0e0e0;
   display: flex;
   flex-direction: column;
   height: 100%;
+  overflow: hidden;
 }
 
 #sidebar-header {
   background: var(--green-dark);
-  color: white;
-  padding: 0 1rem;
   height: var(--header-h);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   flex-shrink: 0;
 }
 
-#sidebar-header h1 { font-size: 1.1rem; font-weight: 600; }
-
-.mode-badge {
-  font-size: 0.65rem;
-  background: var(--green-light);
-  color: white;
-  padding: 2px 8px;
-  border-radius: 20px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
+.sidebar-logo {
+  font-size: 1.8rem;
+  opacity: 0.85;
 }
 
 #conv-list {
@@ -116,19 +106,20 @@ body {
   line-height: 1.6;
 }
 
-/* ── Panel de chat ────────────────────────────────────── */
+/* ── Panel central: chat ─────────────────────────────── */
 #chat-panel {
-  flex: 1;
   display: flex;
   flex-direction: column;
   height: 100%;
   min-width: 0;
+  border-right: 1px solid #e0e0e0;
 }
 
+/* Cabecera del chat: branding ChatLink */
 #chat-header {
   background: var(--green-dark);
   color: white;
-  padding: 0 1rem;
+  padding: 0 1.25rem;
   height: var(--header-h);
   display: flex;
   align-items: center;
@@ -146,25 +137,69 @@ body {
   padding: 4px 8px 4px 0;
 }
 
-#chat-guest-name { font-weight: 600; font-size: 1rem; }
-#chat-guest-phone { font-size: 0.78rem; opacity: 0.8; }
-
-#chat-header .header-actions { margin-left: auto; display: flex; gap: 0.5rem; }
-
-.icon-btn {
-  background: none;
-  border: none;
-  color: white;
-  cursor: pointer;
-  font-size: 1.1rem;
-  padding: 6px;
-  border-radius: 50%;
-  transition: background 0.15s;
-  line-height: 1;
+#chat-brand {
+  flex: 1;
+  min-width: 0;
 }
-.icon-btn:hover { background: rgba(255,255,255,0.15); }
 
-/* ── Área de mensajes ─────────────────────────────────── */
+#chat-brand-name {
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+#chat-guest-name {
+  font-size: 0.78rem;
+  opacity: 0.85;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#chat-guest-meta {
+  font-size: 0.72rem;
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#chat-header .header-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.mode-badge {
+  font-size: 0.65rem;
+  background: var(--green-light);
+  color: white;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* Pantalla de bienvenida */
+#welcome-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  color: #888;
+  gap: 1rem;
+  padding: 2rem;
+  text-align: center;
+}
+#welcome-screen .icon { font-size: 4rem; opacity: 0.4; }
+#welcome-screen p { max-width: 280px; line-height: 1.6; }
+
+/* Área de mensajes */
 #messages-area {
   flex: 1;
   overflow-y: auto;
@@ -197,10 +232,7 @@ body {
   border-top-right-radius: 0;
 }
 
-.msg-original {
-  font-size: 0.92rem;
-  color: #111;
-}
+.msg-original { font-size: 0.92rem; color: #111; }
 
 .msg-translated {
   font-size: 0.78rem;
@@ -213,16 +245,8 @@ body {
   gap: 2px;
 }
 
-.msg-lang-label {
-  font-size: 0.7rem;
-  color: #aaa;
-  font-style: normal;
-}
-
-.msg-translated em {
-  font-style: italic;
-  color: #888;
-}
+.msg-lang-label { font-size: 0.7rem; color: #aaa; }
+.msg-translated em { font-style: italic; color: #888; }
 
 .msg-time {
   position: absolute;
@@ -232,10 +256,25 @@ body {
   color: #aaa;
 }
 
-.msg-date-divider {
-  text-align: center;
-  margin: 0.5rem 0;
+/* Botón de pin (marcar como tarea) */
+.msg-pin-btn {
+  position: absolute;
+  top: 4px;
+  right: 28px;
+  background: none;
+  border: none;
+  font-size: 0.8rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  padding: 0;
+  line-height: 1;
+  z-index: 1;
 }
+.msg-bubble:hover .msg-pin-btn { opacity: 0.6; }
+.msg-pin-btn:hover { opacity: 1 !important; }
+
+.msg-date-divider { text-align: center; margin: 0.5rem 0; }
 .msg-date-divider span {
   background: rgba(225,245,254,0.9);
   color: #555;
@@ -252,12 +291,19 @@ body {
   border-top: 1px solid #ddd;
 }
 
-/* Respuestas rápidas */
+/* Fila: quick replies + botón PLANTILLAS */
+#quick-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-bottom: 0.4rem;
+}
+
 #quick-replies-bar {
+  flex: 1;
   display: flex;
   gap: 0.4rem;
   overflow-x: auto;
-  padding-bottom: 0.4rem;
   scrollbar-width: none;
 }
 #quick-replies-bar::-webkit-scrollbar { display: none; }
@@ -276,7 +322,24 @@ body {
 }
 .qr-btn:hover { background: var(--green-mid); color: white; }
 
-/* Input de texto */
+.tpl-open-btn {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid var(--green-mid);
+  color: var(--green-mid);
+  border-radius: 16px;
+  padding: 4px 12px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s;
+  background: white;
+}
+.tpl-open-btn:hover { background: var(--green-mid); color: white; }
+
+/* Fila de input */
 #input-row {
   display: flex;
   gap: 0.5rem;
@@ -327,43 +390,127 @@ body {
 #send-btn:hover { background: var(--green-mid); }
 #send-btn:disabled { background: #ccc; cursor: not-allowed; }
 
-/* ── Botón de copia de URL ────────────────────────────── */
-#booking-btn {
-  position: fixed;
-  bottom: 80px;
-  right: 1rem;
+/* ── Panel derecho: tareas pendientes ────────────────── */
+#tasks-panel {
+  background: var(--sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+#tasks-header {
   background: var(--green-dark);
   color: white;
-  border: none;
-  border-radius: 28px;
-  padding: 10px 16px;
+  padding: 0 1rem;
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  font-weight: 700;
   font-size: 0.82rem;
-  cursor: pointer;
-  display: flex; align-items: center; gap: 6px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-  z-index: 100;
-  transition: background 0.15s;
+  letter-spacing: 0.06em;
 }
-#booking-btn:hover { background: var(--green-mid); }
-#booking-btn.copied { background: #555; }
 
-/* ── Pantalla de bienvenida (sin conversación seleccionada) ── */
-#welcome-screen {
+#tasks-estado-label {
+  font-size: 0.68rem;
+  opacity: 0.8;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+#tasks-list {
   flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.tasks-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: #aaa;
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+
+.task-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.5rem;
+  transition: border-color 0.15s, background 0.15s;
+}
+.task-item.priority-on {
+  border-color: #e53935;
+  background: #fff8f8;
+}
+
+.task-info { flex: 1; min-width: 0; }
+
+.task-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #111;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-date {
+  font-size: 0.7rem;
+  color: #aaa;
+  margin-top: 2px;
+}
+
+.task-text {
+  font-size: 0.78rem;
+  color: #666;
+  margin-top: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+}
+
+.task-estado {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  background: var(--bg);
-  color: #888;
-  gap: 1rem;
-  padding: 2rem;
-  text-align: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  padding-top: 2px;
 }
-#welcome-screen .icon { font-size: 4rem; opacity: 0.4; }
-#welcome-screen p { max-width: 280px; line-height: 1.6; }
 
-/* ── Demo: formulario de mensaje simulado ─────────────── */
+.task-priority-btn {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: 2px solid #e53935;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.task-priority-btn.priority-on { background: #e53935; }
+.task-priority-btn:hover { background: rgba(229,57,53,0.2); }
+
+.task-del-btn {
+  background: none;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  color: #ccc;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.15s;
+}
+.task-del-btn:hover { color: #e53935; }
+
+/* ── Demo panel ───────────────────────────────────────── */
 #demo-panel {
   background: #fff3cd;
   border-top: 2px solid #ffc107;
@@ -373,7 +520,8 @@ body {
 #demo-panel summary { cursor: pointer; font-size: 0.8rem; color: #856404; font-weight: 600; }
 #demo-form { display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap; }
 #demo-form input, #demo-form select {
-  border: 1px solid #ddd; border-radius: 6px; padding: 5px 8px; font-size: 0.82rem; flex: 1; min-width: 120px;
+  border: 1px solid #ddd; border-radius: 6px; padding: 5px 8px;
+  font-size: 0.82rem; flex: 1; min-width: 120px;
 }
 #demo-send-btn {
   background: #ffc107; border: none; border-radius: 6px;
@@ -381,21 +529,7 @@ body {
 }
 #demo-send-btn:hover { background: #e0a800; }
 
-/* ── Botón "Plantillas" en la cabecera del sidebar ───── */
-.tpl-open-btn {
-  background: rgba(255,255,255,0.15);
-  border: 1px solid rgba(255,255,255,0.35);
-  color: white;
-  border-radius: 20px;
-  padding: 3px 12px;
-  font-size: 0.78rem;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s;
-}
-.tpl-open-btn:hover { background: rgba(255,255,255,0.28); }
-
-/* ── Panel de plantillas ──────────────────────────────── */
+/* ── Panel de plantillas (overlay) ───────────────────── */
 #templates-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.35);
   z-index: 300; transition: opacity 0.2s;
@@ -409,7 +543,6 @@ body {
   z-index: 301;
   display: flex; flex-direction: column;
   box-shadow: -4px 0 20px rgba(0,0,0,0.15);
-  transition: transform 0.25s ease;
 }
 #templates-panel.hidden { display: none; }
 
@@ -429,9 +562,7 @@ body {
 }
 #templates-close:hover { background: rgba(255,255,255,0.15); }
 
-#templates-list {
-  flex: 1; overflow-y: auto; padding: 0.5rem;
-}
+#templates-list { flex: 1; overflow-y: auto; padding: 0.5rem; }
 
 .tpl-item {
   border: 1px solid #eee; border-radius: 8px;
@@ -442,34 +573,26 @@ body {
 .tpl-item-title { font-weight: 600; font-size: 0.88rem; color: #111; }
 .tpl-item-msg {
   font-size: 0.78rem; color: #777;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;
 }
 .tpl-use-btn {
   background: var(--green-light); color: white;
   border: none; border-radius: 6px;
   padding: 4px 10px; font-size: 0.78rem;
-  cursor: pointer; white-space: nowrap; flex-shrink: 0;
-  align-self: center;
+  cursor: pointer; white-space: nowrap; flex-shrink: 0; align-self: center;
 }
 .tpl-use-btn:hover { background: var(--green-mid); }
 .tpl-del-btn {
   background: none; border: none; color: #ccc;
-  font-size: 1rem; cursor: pointer; padding: 2px 4px;
-  align-self: center; flex-shrink: 0;
+  font-size: 1rem; cursor: pointer; padding: 2px 4px; align-self: center; flex-shrink: 0;
 }
 .tpl-del-btn:hover { color: #e53935; }
 
 #templates-add {
   border-top: 1px solid #eee;
-  padding: 0.75rem;
-  flex-shrink: 0;
-  background: #fafafa;
+  padding: 0.75rem; flex-shrink: 0; background: #fafafa;
 }
-#templates-add-title {
-  font-weight: 600; font-size: 0.85rem; color: #444;
-  margin-bottom: 0.5rem;
-}
+#templates-add-title { font-weight: 600; font-size: 0.85rem; color: #444; margin-bottom: 0.5rem; }
 #new-tpl-title, #new-tpl-msg {
   width: 100%; border: 1px solid #ddd; border-radius: 6px;
   padding: 7px 10px; font-size: 0.85rem; font-family: inherit;
@@ -484,7 +607,7 @@ body {
 }
 #new-tpl-save:hover { background: var(--green-mid); }
 
-/* ── Toast de notificación ────────────────────────────── */
+/* ── Toast ────────────────────────────────────────────── */
 #toast {
   position: fixed;
   top: 1rem; left: 50%; transform: translateX(-50%);
@@ -498,53 +621,56 @@ body {
 #toast.show { opacity: 1; }
 
 /* ── Responsive móvil ─────────────────────────────────── */
-@media (max-width: 640px) {
-  /* Layout: sidebar y chat ocupan pantalla completa por turnos */
+@media (max-width: 768px) {
+  /* Volver a flex para el comportamiento de pantalla completa */
+  #app {
+    display: flex;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Sidebar: pantalla completa, visible por defecto */
   #sidebar {
-    width: 100%; min-width: 100%;
-    position: absolute; z-index: 10; height: 100dvh;
+    position: absolute; inset: 0; z-index: 10;
+    width: 100%; height: 100dvh;
   }
   #sidebar.hidden { display: none; }
+
+  /* Chat: pantalla completa, oculto hasta seleccionar conv */
   #chat-panel {
-    position: absolute; width: 100%; height: 100dvh; z-index: 10;
+    position: absolute; inset: 0; z-index: 10;
+    width: 100%; height: 100dvh;
   }
   #chat-panel.hidden { display: none; }
+
+  /* Botón volver visible en móvil */
   #chat-header .back-btn { display: block; }
 
-  /* Sidebar: cabecera más compacta */
-  #sidebar-header { padding: 0 0.75rem; }
-  #sidebar-header h1 { font-size: 1rem; }
+  /* Ocultar panel de tareas en móvil */
+  #tasks-panel { display: none; }
 
-  /* Burbujas más anchas en móvil */
+  /* Burbujas más anchas */
   .msg-bubble { max-width: 88%; }
+  .msg-pin-btn { opacity: 0.5; }
 
-  /* Barra inferior: input-row en columna para que quepan todos los elementos */
+  /* Cabecera más compacta */
+  #chat-header { padding: 0 0.75rem; }
+  #chat-brand-name { font-size: 1.1rem; }
+
+  /* Barra inferior en móvil */
   #bottom-bar { padding: 0.4rem 0.5rem; }
-  #input-row { flex-wrap: wrap; gap: 0.4rem; }
-  #lang-override {
-    order: -1;           /* selector encima del textarea */
-    width: 100%;
-    max-width: 100%;
-    border-radius: 8px;
-    font-size: 0.82rem;
-  }
-  #msg-input { font-size: 0.95rem; }
-  #send-btn { width: 40px; height: 40px; font-size: 1.1rem; }
+  #quick-bar-row { flex-wrap: wrap; }
+  #quick-replies-bar { order: 2; width: 100%; }
+  .tpl-open-btn { order: 1; margin-left: auto; }
 
-  /* Quick replies: fuente más pequeña para que quepan más */
-  .qr-btn { font-size: 0.72rem; padding: 4px 8px; }
+  /* Input row */
+  #lang-override { max-width: 90px; font-size: 0.75rem; }
 
-  /* Panel demo: más compacto */
+  /* Panel demo */
   #demo-panel { padding: 0.5rem 0.75rem; }
   #demo-form { flex-direction: column; }
-  #demo-form input, #demo-form select { min-width: unset; width: 100%; }
+  #demo-form input { min-width: unset; width: 100%; }
 
-  /* Botón de notificaciones: no solapar con el contenido */
+  /* Botón notificaciones */
   #notif-btn { top: 10px; right: 0.75rem; font-size: 0.72rem; padding: 3px 10px; }
-
-  /* Botón de reservas */
-  #booking-btn { bottom: 70px; font-size: 0.78rem; }
-
-  /* Panel de plantillas: ancho completo en móvil */
-  #templates-panel { width: 100vw; }
 }
