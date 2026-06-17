@@ -4,7 +4,7 @@ const state = {
   activeConvId: null,
   messages: [],
   quickReplies: [],
-  tasks: JSON.parse(localStorage.getItem('chatlink_tasks') || '[]'),
+  tasks: [],
 };
 
 /* ── Referencias DOM ────────────────────────────────── */
@@ -68,7 +68,7 @@ async function init() {
 
   await loadConversations();
   await loadQuickReplies();
-  renderTasks();
+  await loadTasks();
 
   // En escritorio el chat siempre visible; en móvil empieza oculto
   if (window.innerWidth > 768) {
@@ -202,37 +202,51 @@ function renderQuickReplies() {
 }
 
 /* ── Tareas pendientes ──────────────────────────────── */
-function saveTasks() {
-  localStorage.setItem('chatlink_tasks', JSON.stringify(state.tasks));
+async function loadTasks() {
+  try {
+    const rows = await fetch('/api/tasks').then(r => r.json());
+    state.tasks = rows;
+    renderTasks();
+  } catch (e) { console.error('Error cargando tareas', e); }
 }
 
-function addTask(msg, conv) {
-  if (state.tasks.find(t => t.msgId === msg.id)) {
+async function addTask(msg, conv) {
+  if (state.tasks.find(t => t.msg_id === msg.id)) {
     showToast('Este mensaje ya está en tareas pendientes');
     return;
   }
-  state.tasks.unshift({
-    id: Date.now(),
-    msgId: msg.id,
-    guestName: conv.guest_name || conv.guest_phone,
-    createdAt: msg.created_at,
-    text: msg.original_text || msg.translated_text || '',
-    priority: false,
-  });
-  saveTasks();
-  renderTasks();
-  showToast('Añadido a tareas pendientes 📌');
+  try {
+    const res = await fetch('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        msg_id: msg.id,
+        guest_name: conv.guest_name || conv.guest_phone,
+        message_text: msg.original_text || msg.translated_text || '',
+      }),
+    });
+    if (res.status === 409) { showToast('Este mensaje ya está en tareas pendientes'); return; }
+    const task = await res.json();
+    state.tasks.unshift(task);
+    renderTasks();
+    showToast('Añadido a tareas pendientes 📌');
+  } catch (e) { showToast('Error al guardar tarea'); }
 }
 
-function removeTask(id) {
-  state.tasks = state.tasks.filter(t => t.id !== id);
-  saveTasks();
-  renderTasks();
+async function removeTask(id) {
+  try {
+    await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+    state.tasks = state.tasks.filter(t => t.id !== id);
+    renderTasks();
+  } catch (e) { showToast('Error al eliminar tarea'); }
 }
 
-function togglePriority(id) {
-  const task = state.tasks.find(t => t.id === id);
-  if (task) { task.priority = !task.priority; saveTasks(); renderTasks(); }
+async function togglePriority(id) {
+  try {
+    await fetch(`/api/tasks/${id}/priority`, { method: 'PATCH' });
+    const task = state.tasks.find(t => t.id === id);
+    if (task) { task.priority = !task.priority; renderTasks(); }
+  } catch (e) { showToast('Error al cambiar prioridad'); }
 }
 
 function renderTasks() {
@@ -243,13 +257,13 @@ function renderTasks() {
   }
 
   tasksList.innerHTML = state.tasks.map(t => {
-    const date = formatTime(t.createdAt);
-    const text = t.text && t.text.length > 80 ? t.text.slice(0, 80) + '…' : (t.text || '');
+    const date = formatTime(t.created_at);
+    const text = t.message_text && t.message_text.length > 80 ? t.message_text.slice(0, 80) + '…' : (t.message_text || '');
     const pClass = t.priority ? 'priority-on' : '';
     return `
       <div class="task-item ${pClass}">
         <div class="task-info">
-          <div class="task-name">${esc(t.guestName)}</div>
+          <div class="task-name">${esc(t.guest_name)}</div>
           <div class="task-date">${date}</div>
           <div class="task-text">${esc(text)}</div>
         </div>

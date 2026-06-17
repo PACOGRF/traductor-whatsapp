@@ -129,6 +129,44 @@ router.post('/demo/message', async (req, res) => {
   }
 });
 
+// ── Tareas pendientes ──────────────────────────────────
+router.get('/tasks', async (req, res) => {
+  try {
+    const rows = await db.all('SELECT * FROM tasks ORDER BY id DESC');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/tasks', async (req, res) => {
+  try {
+    const { msg_id, guest_name, message_text } = req.body;
+    const exists = await db.get('SELECT id FROM tasks WHERE msg_id = ?', [msg_id]);
+    if (exists) return res.status(409).json({ error: 'Ya existe' });
+    await db.run(
+      'INSERT INTO tasks (msg_id, guest_name, message_text) VALUES (?, ?, ?)',
+      [msg_id, guest_name, message_text]
+    );
+    const row = await db.get('SELECT * FROM tasks ORDER BY id DESC LIMIT 1');
+    res.json(row);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.patch('/tasks/:id/priority', async (req, res) => {
+  try {
+    const task = await db.get('SELECT * FROM tasks WHERE id = ?', [req.params.id]);
+    if (!task) return res.status(404).json({ error: 'No encontrado' });
+    await db.run('UPDATE tasks SET priority = ? WHERE id = ?', [!task.priority, req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/tasks/:id', async (req, res) => {
+  try {
+    await db.run('DELETE FROM tasks WHERE id = ?', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // URL de reservas
 router.get('/booking-url', (req, res) => {
   res.json({ url: process.env.BOOKING_URL || 'https://tu-web.com/reservas' });

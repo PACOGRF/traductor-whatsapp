@@ -28,6 +28,15 @@ CREATE TABLE IF NOT EXISTS quick_replies (
   active INTEGER DEFAULT 1
 );
 
+CREATE TABLE IF NOT EXISTS tasks (
+  id SERIAL PRIMARY KEY,
+  msg_id INTEGER,
+  guest_name TEXT,
+  message_text TEXT,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  priority BOOLEAN DEFAULT FALSE
+);
+
 INSERT INTO quick_replies (id, title, message_es, sort_order) VALUES
   (1, 'Bienvenida', '¡Bienvenido/a al apartamento! Espero que disfrute su estancia.', 1),
   (2, 'Código de acceso', 'El código del edificio es 1234 y el de la habitación es 5678.', 2),
