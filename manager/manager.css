@@ -7,7 +7,7 @@
   --green-light:  #25d366;
   --bubble-in:    #7ec8b0;
   --bubble-out:   #dff2eb;
-  --bg:           #eeeeee;
+  --bg:           #f5f5f5;
   --sidebar-bg:   #1e3d37;
   --panel-bg:     #1e3d37;
   --item-hover:   #2d5a50;
@@ -260,11 +260,11 @@ body {
   border-top-right-radius: 0;
 }
 
-.msg-original { font-size: 0.92rem; color: #1a1a1a; }
+.msg-original { font-size: 0.92rem; color: #000000; }
 
 .msg-translated {
   font-size: 0.78rem;
-  color: #777;
+  color: #222;
   margin-top: 5px;
   border-top: 1px solid rgba(0,0,0,0.07);
   padding-top: 5px;
@@ -273,8 +273,8 @@ body {
   gap: 2px;
 }
 
-.msg-lang-label { font-size: 0.7rem; color: #aaa; }
-.msg-translated em { font-style: italic; color: #888; }
+.msg-lang-label { font-size: 0.7rem; color: #444; }
+.msg-translated em { font-style: italic; color: #333; }
 
 .msg-time {
   position: absolute;
