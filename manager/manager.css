@@ -7,13 +7,13 @@
   --green-light:  #25d366;
   --bubble-in:    #f0f2f0;
   --bubble-out:   #d4edda;
-  --bg:           #1a3530;
+  --bg:           #eeeeee;
   --sidebar-bg:   #1e3d37;
   --panel-bg:     #1e3d37;
   --item-hover:   #2d5a50;
   --item-active:  #356657;
-  --row-dark:     #1e3d37;
-  --row-light:    #26504a;
+  --row-dark:     #c8e8df;
+  --row-light:    #e8f5f1;
   --text-main:    #ffffff;
   --text-sub:     rgba(255,255,255,0.65);
   --border:       rgba(255,255,255,0.08);
