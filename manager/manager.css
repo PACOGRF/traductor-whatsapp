@@ -5,8 +5,8 @@
   --green-dark:   #075e54;
   --green-mid:    #128c7e;
   --green-light:  #25d366;
-  --bubble-in:    #f0f2f0;
-  --bubble-out:   #d4edda;
+  --bubble-in:    #7ec8b0;
+  --bubble-out:   #dff2eb;
   --bg:           #eeeeee;
   --sidebar-bg:   #1e3d37;
   --panel-bg:     #1e3d37;
@@ -83,10 +83,9 @@ body {
   cursor: pointer;
   transition: background 0.15s;
 }
-.conv-item:nth-child(odd)  { background: var(--row-dark); }
-.conv-item:nth-child(even) { background: var(--row-light); }
+.conv-item { background: var(--item-active); }
 .conv-item:hover  { background: var(--item-hover); }
-.conv-item.active { background: var(--item-active); }
+.conv-item.active { background: var(--item-hover); }
 
 .conv-avatar {
   width: 46px; height: 46px;
@@ -476,8 +475,7 @@ body {
   margin-bottom: 0;
   transition: background 0.15s;
 }
-.task-item:nth-child(odd)  { background: var(--row-dark); }
-.task-item:nth-child(even) { background: var(--row-light); }
+.task-item { background: var(--item-active); }
 .task-item:hover { background: var(--item-hover); }
 .task-item.priority-on { background: rgba(229,57,53,0.2) !important; }
 
