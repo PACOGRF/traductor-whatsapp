@@ -274,15 +274,10 @@ async function selectConversation(id) {
   const conv = state.conversations.find(c => c.id === id);
   if (!conv) return;
 
-  // Actualizar cabecera: mostrar nombre real solo si es distinto al teléfono
-  const realName = conv.guest_name &&
-    conv.guest_name !== conv.guest_phone &&
-    !conv.guest_name.startsWith('whatsapp:')
-      ? conv.guest_name : null;
-  chatGuestName.textContent = realName
-    ? `${realName} · ${conv.guest_phone}` : conv.guest_phone;
-  chatGuestMeta.textContent = conv.guest_language && conv.guest_language !== 'es'
-    ? `habla ${langName(conv.guest_language)}` : '';
+  // Cabecera: teléfono + idioma en la misma línea junto a ChatLink
+  const langSuffix = conv.guest_language && conv.guest_language !== 'es'
+    ? ` · habla ${langName(conv.guest_language)}` : '';
+  chatGuestName.textContent = `${conv.guest_phone}${langSuffix}`;
 
   // Mostrar chat, ocultar bienvenida
   welcomeScreen.style.display = 'none';
