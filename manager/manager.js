@@ -274,13 +274,12 @@ async function selectConversation(id) {
   const conv = state.conversations.find(c => c.id === id);
   if (!conv) return;
 
-  // Actualizar cabecera (sin duplicar teléfono)
-  chatGuestName.textContent = conv.guest_name || conv.guest_phone;
-  const langLabel = conv.guest_language && conv.guest_language !== 'es'
+  // Actualizar cabecera: línea 1 = nombre+teléfono, línea 2 = idioma
+  chatGuestName.textContent = conv.guest_name
+    ? `${conv.guest_name} · ${conv.guest_phone}`
+    : conv.guest_phone;
+  chatGuestMeta.textContent = conv.guest_language && conv.guest_language !== 'es'
     ? `habla ${langName(conv.guest_language)}` : '';
-  chatGuestMeta.textContent = conv.guest_name
-    ? `${conv.guest_phone}${langLabel ? ' · ' + langLabel : ''}`
-    : langLabel;
 
   // Mostrar chat, ocultar bienvenida
   welcomeScreen.style.display = 'none';
@@ -433,6 +432,8 @@ const LANG_NAMES = {
   ja: 'japonés', ko: 'coreano', ar: 'árabe', pl: 'polaco',
   sv: 'sueco', da: 'danés', fi: 'finlandés', nb: 'noruego',
   cs: 'checo', ro: 'rumano', tr: 'turco', uk: 'ucraniano',
+  el: 'griego', hu: 'húngaro', sk: 'eslovaco', bg: 'búlgaro',
+  hr: 'croata', ca: 'catalán', eu: 'euskera', gl: 'gallego',
 };
 function langName(code) { return LANG_NAMES[code] || code || 'idioma desconocido'; }
 
