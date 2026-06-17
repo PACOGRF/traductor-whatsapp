@@ -18,7 +18,7 @@
   <!-- ── Columna izquierda: lista de conversaciones (25%) ── -->
   <aside id="sidebar">
     <div id="sidebar-header">
-      <span class="sidebar-logo">💬</span>
+      <span class="sidebar-title">Listado de chats</span>
     </div>
     <div id="conv-list">
       <div class="conv-empty">
@@ -38,6 +38,7 @@
         <div id="chat-guest-meta"></div>
       </div>
       <div class="header-actions">
+        <button id="notif-btn" title="Activar notificaciones push" style="display:none;">🔔 Avisos</button>
         <span class="mode-badge" id="mode-badge">DEMO</span>
       </div>
     </div>
@@ -105,13 +106,6 @@
   </div>
 </details>
 
-<!-- Botón de notificaciones -->
-<button id="notif-btn" title="Activar notificaciones push" style="
-  position:fixed;top:13px;right:1rem;z-index:200;
-  background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.35);
-  color:white;border-radius:20px;padding:4px 12px;font-size:0.78rem;
-  cursor:pointer;display:none;
-">🔔 Activar avisos</button>
 
 <!-- Panel lateral de plantillas -->
 <div id="templates-panel" class="hidden">

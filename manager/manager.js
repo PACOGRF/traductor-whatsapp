@@ -274,11 +274,13 @@ async function selectConversation(id) {
   const conv = state.conversations.find(c => c.id === id);
   if (!conv) return;
 
-  // Actualizar cabecera
+  // Actualizar cabecera (sin duplicar teléfono)
   chatGuestName.textContent = conv.guest_name || conv.guest_phone;
-  chatGuestMeta.textContent = conv.guest_language && conv.guest_language !== 'es'
-    ? `${conv.guest_phone} · habla ${langName(conv.guest_language)}`
-    : conv.guest_phone;
+  const langLabel = conv.guest_language && conv.guest_language !== 'es'
+    ? `habla ${langName(conv.guest_language)}` : '';
+  chatGuestMeta.textContent = conv.guest_name
+    ? `${conv.guest_phone}${langLabel ? ' · ' + langLabel : ''}`
+    : langLabel;
 
   // Mostrar chat, ocultar bienvenida
   welcomeScreen.style.display = 'none';
