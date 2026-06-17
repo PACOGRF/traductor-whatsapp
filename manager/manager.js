@@ -274,10 +274,13 @@ async function selectConversation(id) {
   const conv = state.conversations.find(c => c.id === id);
   if (!conv) return;
 
-  // Actualizar cabecera: línea 1 = nombre+teléfono, línea 2 = idioma
-  chatGuestName.textContent = conv.guest_name
-    ? `${conv.guest_name} · ${conv.guest_phone}`
-    : conv.guest_phone;
+  // Actualizar cabecera: mostrar nombre real solo si es distinto al teléfono
+  const realName = conv.guest_name &&
+    conv.guest_name !== conv.guest_phone &&
+    !conv.guest_name.startsWith('whatsapp:')
+      ? conv.guest_name : null;
+  chatGuestName.textContent = realName
+    ? `${realName} · ${conv.guest_phone}` : conv.guest_phone;
   chatGuestMeta.textContent = conv.guest_language && conv.guest_language !== 'es'
     ? `habla ${langName(conv.guest_language)}` : '';
 
