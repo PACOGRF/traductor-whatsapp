@@ -83,9 +83,10 @@ body {
   cursor: pointer;
   transition: background 0.15s;
 }
-.conv-item { background: var(--item-active); }
-.conv-item:hover  { background: var(--item-hover); }
-.conv-item.active { background: var(--item-hover); }
+.conv-item:nth-child(odd)  { background: #356657; }
+.conv-item:nth-child(even) { background: #4d8c75; }
+.conv-item:hover           { background: #2d5a50; }
+.conv-item.active          { background: #2d5a50; }
 
 .conv-avatar {
   width: 46px; height: 46px;
@@ -475,8 +476,9 @@ body {
   margin-bottom: 0;
   transition: background 0.15s;
 }
-.task-item { background: var(--item-active); }
-.task-item:hover { background: var(--item-hover); }
+.task-item:nth-child(odd)  { background: #356657; }
+.task-item:nth-child(even) { background: #4d8c75; }
+.task-item:hover           { background: #2d5a50; }
 .task-item.priority-on { background: rgba(229,57,53,0.2) !important; }
 
 .task-info { flex: 1; min-width: 0; }
