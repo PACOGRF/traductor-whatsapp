@@ -433,7 +433,7 @@ const LANG_NAMES = {
   sv: 'sueco', da: 'danés', fi: 'finlandés', nb: 'noruego',
   cs: 'checo', ro: 'rumano', tr: 'turco', uk: 'ucraniano',
   el: 'griego', hu: 'húngaro', sk: 'eslovaco', bg: 'búlgaro',
-  hr: 'croata', ca: 'catalán', eu: 'euskera', gl: 'gallego',
+  hr: 'croata', ca: 'catalán/valenciano', eu: 'euskera', gl: 'gallego',
 };
 function langName(code) { return LANG_NAMES[code] || code || 'idioma desconocido'; }
 
