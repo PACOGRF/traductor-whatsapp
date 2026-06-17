@@ -313,7 +313,7 @@ body {
 
 /* ── Barra inferior ───────────────────────────────────── */
 #bottom-bar {
-  background: var(--sidebar-bg);
+  background: #1e3d37;
   padding: 0.5rem;
   flex-shrink: 0;
   border-top: 1px solid var(--border);
