@@ -3,6 +3,20 @@ const router = express.Router();
 const db = require('../db/db');
 const { translateWithDetection } = require('../services/translate');
 
+// Verificación de webhook para Meta WhatsApp Business API
+router.get('/whatsapp', (req, res) => {
+  const mode      = req.query['hub.mode'];
+  const token     = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+  const verifyToken = process.env.WEBHOOK_VERIFY_TOKEN || 'chatlink_verify';
+
+  if (mode === 'subscribe' && token === verifyToken) {
+    res.status(200).send(challenge);
+  } else {
+    res.sendStatus(403);
+  }
+});
+
 router.post('/whatsapp', express.urlencoded({ extended: false }), async (req, res) => {
   try {
     const { From, Body, MediaUrl0, MediaContentType0 } = req.body;
