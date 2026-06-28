@@ -55,13 +55,27 @@ function registerChatHandlers(io, app) {
           phone: conv.guest_phone,
         });
 
-        if (process.env.TWILIO_ACCOUNT_SID && !process.env.TWILIO_ACCOUNT_SID.includes('xxx')) {
-          const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-          await twilio.messages.create({
-            from: process.env.TWILIO_WHATSAPP_NUMBER,
-            to: conv.guest_phone,
-            body: translatedText,
+        if (process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.WHATSAPP_ACCESS_TOKEN) {
+          const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+          const token = process.env.WHATSAPP_ACCESS_TOKEN;
+          const url = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              messaging_product: 'whatsapp',
+              to: conv.guest_phone,
+              type: 'text',
+              text: { body: translatedText },
+            }),
           });
+          if (!response.ok) {
+            const err = await response.json();
+            console.error('Error Meta API:', JSON.stringify(err));
+          }
         } else {
           console.log(`[DEMO] Enviaría a ${conv.guest_phone}: "${translatedText}"`);
         }

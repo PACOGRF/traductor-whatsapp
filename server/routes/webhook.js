@@ -17,18 +17,33 @@ router.get('/whatsapp', (req, res) => {
   }
 });
 
-router.post('/whatsapp', express.urlencoded({ extended: false }), async (req, res) => {
+router.post('/whatsapp', express.json(), async (req, res) => {
+  // Meta requiere respuesta 200 inmediata
+  res.sendStatus(200);
+
   try {
-    const { From, Body, MediaUrl0, MediaContentType0 } = req.body;
-    const guestPhone = From;
+    const entry = req.body?.entry?.[0];
+    const change = entry?.changes?.[0];
+    const value = change?.value;
+
+    if (!value?.messages?.length) return;
+
+    const metaMsg = value.messages[0];
+    const guestPhone = metaMsg.from;
+    const Body = metaMsg.text?.body || '';
+    const mediaId = metaMsg.image?.id || metaMsg.document?.id || null;
+    const mediaType = metaMsg.image ? 'image' : metaMsg.document ? 'document' : null;
+
+    // Nombre del contacto si Meta lo envía
+    const contactName = value.contacts?.[0]?.profile?.name || guestPhone;
 
     let conv = await db.get('SELECT * FROM conversations WHERE guest_phone = ?', [guestPhone]);
     if (!conv) {
-      await db.run('INSERT INTO conversations (guest_phone, guest_name) VALUES (?, ?)', [guestPhone, guestPhone]);
+      await db.run('INSERT INTO conversations (guest_phone, guest_name) VALUES (?, ?)', [guestPhone, contactName]);
       conv = await db.get('SELECT * FROM conversations WHERE guest_phone = ?', [guestPhone]);
     }
 
-    const { translatedText, detectedLanguage: detectedLang } = await translateWithDetection(Body || '', 'es');
+    const { translatedText, detectedLanguage: detectedLang } = await translateWithDetection(Body, 'es');
 
     if (detectedLang && detectedLang !== conv.guest_language) {
       await db.run('UPDATE conversations SET guest_language = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [detectedLang, conv.id]);
@@ -37,7 +52,7 @@ router.post('/whatsapp', express.urlencoded({ extended: false }), async (req, re
 
     await db.run(
       'INSERT INTO messages (conversation_id, direction, original_text, translated_text, language_detected, media_url, media_type) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [conv.id, 'incoming', Body || '', translatedText, detectedLang, MediaUrl0 || null, MediaContentType0 || null]
+      [conv.id, 'incoming', Body, translatedText, detectedLang, mediaId, mediaType]
     );
 
     const msg = await db.get('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1', [conv.id]);
@@ -45,12 +60,8 @@ router.post('/whatsapp', express.urlencoded({ extended: false }), async (req, re
     if (router.io) {
       router.io.emit('new_message', { conversation: conv, message: msg });
     }
-
-    res.set('Content-Type', 'text/xml');
-    res.send('<Response></Response>');
   } catch (err) {
-    console.error('Error en webhook:', err);
-    res.status(500).send('<Response></Response>');
+    console.error('Error en webhook Meta:', err);
   }
 });
 
