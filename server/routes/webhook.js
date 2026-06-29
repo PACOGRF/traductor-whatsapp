@@ -33,14 +33,24 @@ router.post('/whatsapp', express.json(), async (req, res) => {
     const Body = metaMsg.text?.body || '';
     const mediaId = metaMsg.image?.id || metaMsg.document?.id || null;
     const mediaType = metaMsg.image ? 'image' : metaMsg.document ? 'document' : null;
+    const phoneNumberId = value.metadata?.phone_number_id || null;
 
     // Nombre del contacto si Meta lo envía
     const contactName = value.contacts?.[0]?.profile?.name || guestPhone;
 
-    let conv = await db.get('SELECT * FROM conversations WHERE guest_phone = ?', [guestPhone]);
+    let conv = await db.get(
+      'SELECT * FROM conversations WHERE guest_phone = ? AND phone_number_id = ?',
+      [guestPhone, phoneNumberId]
+    );
     if (!conv) {
-      await db.run('INSERT INTO conversations (guest_phone, guest_name) VALUES (?, ?)', [guestPhone, contactName]);
-      conv = await db.get('SELECT * FROM conversations WHERE guest_phone = ?', [guestPhone]);
+      await db.run(
+        'INSERT INTO conversations (guest_phone, guest_name, phone_number_id) VALUES (?, ?, ?)',
+        [guestPhone, contactName, phoneNumberId]
+      );
+      conv = await db.get(
+        'SELECT * FROM conversations WHERE guest_phone = ? AND phone_number_id = ?',
+        [guestPhone, phoneNumberId]
+      );
     }
 
     const { translatedText, detectedLanguage: detectedLang } = await translateWithDetection(Body, 'es');
@@ -58,6 +68,9 @@ router.post('/whatsapp', express.json(), async (req, res) => {
     const msg = await db.get('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1', [conv.id]);
 
     if (router.io) {
+      // Emitir en la sala del cliente para enrutamiento futuro
+      const room = phoneNumberId || 'default';
+      router.io.to(room).emit('new_message', { conversation: conv, message: msg });
       router.io.emit('new_message', { conversation: conv, message: msg });
     }
   } catch (err) {

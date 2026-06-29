@@ -25,8 +25,12 @@ function registerChatHandlers(io, app) {
   io.on('connection', (socket) => {
     console.log('Panel del gestor conectado:', socket.id);
 
+    socket.on('join_room', (phoneNumberId) => {
+      if (phoneNumberId) socket.join(phoneNumberId);
+    });
+
     socket.on('manager_reply', async (data) => {
-      const { conversationId, text, langOverride } = data;
+      const { conversationId, text, langOverride, phoneNumberId } = data;
 
       try {
         const conv = await db.get('SELECT * FROM conversations WHERE id = ?', [conversationId]);
@@ -55,10 +59,10 @@ function registerChatHandlers(io, app) {
           phone: conv.guest_phone,
         });
 
-        if (process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.WHATSAPP_ACCESS_TOKEN) {
-          const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+        const resolvedPhoneNumberId = phoneNumberId || process.env.WHATSAPP_PHONE_NUMBER_ID;
+        if (resolvedPhoneNumberId && process.env.WHATSAPP_ACCESS_TOKEN) {
           const token = process.env.WHATSAPP_ACCESS_TOKEN;
-          const url = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
+          const url = `https://graph.facebook.com/v19.0/${resolvedPhoneNumberId}/messages`;
           const response = await fetch(url, {
             method: 'POST',
             headers: {

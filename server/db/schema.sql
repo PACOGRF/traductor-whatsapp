@@ -1,11 +1,13 @@
 CREATE TABLE IF NOT EXISTS conversations (
   id SERIAL PRIMARY KEY,
-  guest_phone TEXT NOT NULL UNIQUE,
+  guest_phone TEXT NOT NULL,
   guest_name TEXT,
   guest_language TEXT DEFAULT 'en',
   apartment TEXT,
+  phone_number_id TEXT,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (guest_phone, phone_number_id)
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -25,7 +27,8 @@ CREATE TABLE IF NOT EXISTS quick_replies (
   title TEXT NOT NULL,
   message_es TEXT NOT NULL,
   sort_order INTEGER DEFAULT 0,
-  active INTEGER DEFAULT 1
+  active INTEGER DEFAULT 1,
+  phone_number_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS tasks (
@@ -34,7 +37,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   guest_name TEXT,
   message_text TEXT,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-  priority BOOLEAN DEFAULT FALSE
+  priority BOOLEAN DEFAULT FALSE,
+  phone_number_id TEXT
 );
 
 INSERT INTO quick_replies (id, title, message_es, sort_order) VALUES
