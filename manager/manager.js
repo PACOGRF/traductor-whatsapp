@@ -27,6 +27,12 @@ const tasksList      = $('tasks-list');
 /* ── Socket.io ──────────────────────────────────────── */
 const socket = io();
 
+// Unirse a la sala del número activo cuando el servidor lo indique
+socket.on('connect', () => {
+  const phoneNumberId = window.CHATLINK_PHONE_NUMBER_ID;
+  if (phoneNumberId) socket.emit('join_room', phoneNumberId);
+});
+
 socket.on('new_message', ({ conversation, message }) => {
   const existing = state.conversations.find(c => c.id === conversation.id);
   if (existing) {
@@ -317,7 +323,9 @@ async function sendReply() {
   autoResize();
 
   const langOverride = $('lang-override').value;
-  socket.emit('manager_reply', { conversationId: state.activeConvId, text, langOverride });
+  const conv = state.conversations.find(c => c.id === state.activeConvId);
+  const phoneNumberId = conv?.phone_number_id || window.CHATLINK_PHONE_NUMBER_ID || null;
+  socket.emit('manager_reply', { conversationId: state.activeConvId, text, langOverride, phoneNumberId });
   sendBtn.disabled = false;
   msgInput.focus();
 }

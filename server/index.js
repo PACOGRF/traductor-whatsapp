@@ -38,9 +38,14 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Panel del gestor
+// Panel del gestor — inyecta el phone_number_id activo como variable global JS
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../manager/index.html'));
+});
+
+app.get('/config.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.send(`window.CHATLINK_PHONE_NUMBER_ID = ${JSON.stringify(process.env.WHATSAPP_PHONE_NUMBER_ID || null)};`);
 });
 
 // Sockets
