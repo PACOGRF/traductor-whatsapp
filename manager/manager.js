@@ -1,3 +1,7 @@
+/* ── Autenticación ──────────────────────────────────── */
+const authToken = localStorage.getItem('chatlink_token');
+if (!authToken) window.location.href = '/login.html';
+
 /* ── Estado de la aplicación ────────────────────────── */
 const state = {
   conversations: [],
@@ -458,9 +462,12 @@ const LANG_NAMES = {
 function langName(code) { return LANG_NAMES[code] || code || 'idioma desconocido'; }
 
 /* ── Utilidades ─────────────────────────────────────── */
-async function apiFetch(url, options) {
+async function apiFetch(url, options = {}) {
   try {
+    const token = localStorage.getItem('chatlink_token');
+    options.headers = { ...(options.headers || {}), 'Authorization': `Bearer ${token}` };
     const r = await fetch(url, options);
+    if (r.status === 401) { localStorage.removeItem('chatlink_token'); window.location.href = '/login.html'; return null; }
     if (!r.ok) throw new Error(r.statusText);
     return r.json();
   } catch (e) {
