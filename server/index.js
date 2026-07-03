@@ -65,7 +65,10 @@ app.get('/', (req, res) => {
 
 app.get('/config.js', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript');
-  res.send(`window.CHATLINK_PHONE_NUMBER_ID = ${JSON.stringify(process.env.WHATSAPP_PHONE_NUMBER_ID || null)};`);
+  res.send(`
+    window.CHATLINK_PHONE_NUMBER_ID = ${JSON.stringify(process.env.WHATSAPP_PHONE_NUMBER_ID || null)};
+    window.CHATLINK_COMPANY_NAME = ${JSON.stringify(process.env.COMPANY_NAME || 'Tecorem')};
+  `);
 });
 
 // Sockets

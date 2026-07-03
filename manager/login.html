@@ -104,7 +104,7 @@
   <div class="login-card">
     <div class="login-logo">
       <h1>ChatLink</h1>
-      <p>Panel del gestor — Tecorem</p>
+      <p id="company-subtitle">Panel del gestor</p>
     </div>
 
     <div class="form-group">
@@ -127,6 +127,14 @@
     // Si ya hay token válido, ir directo al panel
     const token = localStorage.getItem('chatlink_token');
     if (token) window.location.href = '/';
+
+    // Cargar nombre de empresa desde config.js
+    fetch('/config.js').then(r => r.text()).then(js => {
+      eval(js);
+      if (window.CHATLINK_COMPANY_NAME) {
+        document.getElementById('company-subtitle').textContent = 'Panel del gestor — ' + window.CHATLINK_COMPANY_NAME;
+      }
+    });
 
     async function doLogin() {
       const username = document.getElementById('username').value.trim();
