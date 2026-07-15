@@ -9,7 +9,9 @@ const state = {
   messages: [],
   quickReplies: [],
   tasks: [],
+  scheduled: [],          // mensajes programados de la conversación activa
 };
+let editingScheduledId = null; // id del programado que se está editando en el modal
 
 /* ── Referencias DOM ────────────────────────────────── */
 const $ = id => document.getElementById(id);
@@ -67,6 +69,23 @@ socket.on('message_sent', ({ conversation, message }) => {
   }
 });
 
+// Un mensaje programado se envió: quitarlo de la lista de pendientes
+socket.on('scheduled_sent', ({ id, conversation_id }) => {
+  if (state.activeConvId === conversation_id) {
+    state.scheduled = state.scheduled.filter(s => s.id !== id);
+    renderMessages();
+  }
+  showToast('🕐 Mensaje programado enviado ✓');
+});
+
+// Un mensaje programado falló: marcarlo en rojo en el hilo
+socket.on('scheduled_failed', ({ id, conversation_id, reason }) => {
+  const sm = state.scheduled.find(s => s.id === id);
+  if (sm) { sm.status = 'failed'; sm.fail_reason = reason; }
+  if (state.activeConvId === conversation_id) renderMessages();
+  showToast('⚠️ Falló un mensaje programado: ' + (reason || 'error desconocido'), 5000);
+});
+
 /* ── Carga inicial ──────────────────────────────────── */
 async function init() {
   const health = await apiFetch('/health');
@@ -99,6 +118,11 @@ async function loadQuickReplies() {
 async function loadMessages(convId) {
   const data = await apiFetch(`/api/conversations/${convId}/messages`);
   if (data) { state.messages = data; renderMessages(); }
+}
+
+async function loadScheduled(convId) {
+  const data = await apiFetch(`/api/conversations/${convId}/scheduled`);
+  if (data && Array.isArray(data)) { state.scheduled = data; renderMessages(); }
 }
 
 /* ── Renderizado: lista de conversaciones ───────────── */
@@ -134,7 +158,7 @@ function renderConvList() {
 
 /* ── Renderizado: mensajes ──────────────────────────── */
 function renderMessages() {
-  if (state.messages.length === 0) {
+  if (state.messages.length === 0 && state.scheduled.length === 0) {
     messagesArea.innerHTML = '<div style="text-align:center;color:#aaa;margin-top:2rem;">No hay mensajes aún</div>';
     return;
   }
@@ -181,7 +205,7 @@ function renderMessages() {
         ${subText}
         <span class="msg-time">${time}</span>
       </div>`;
-  }).join('');
+  }).join('') + renderScheduledHtml();
 
   // Eventos para los botones de pin
   messagesArea.querySelectorAll('.msg-pin-btn').forEach(btn => {
@@ -193,7 +217,47 @@ function renderMessages() {
     });
   });
 
+  // Eventos de los mensajes programados (editar / cancelar)
+  messagesArea.querySelectorAll('.sched-edit-btn').forEach(btn =>
+    btn.addEventListener('click', () => openScheduleModal(Number(btn.dataset.id)))
+  );
+  messagesArea.querySelectorAll('.sched-del-btn').forEach(btn =>
+    btn.addEventListener('click', () => cancelScheduled(Number(btn.dataset.id)))
+  );
+
   messagesArea.scrollTop = messagesArea.scrollHeight;
+}
+
+/* ── Renderizado: mensajes programados en el hilo ───── */
+function renderScheduledHtml() {
+  if (!state.scheduled.length) return '';
+  return state.scheduled.map(s => {
+    const when = new Date(s.send_at).toLocaleString('es-ES', {
+      day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'
+    });
+    const failed = s.status === 'failed';
+    const badge  = failed
+      ? '❌ Falló el envío programado'
+      : `🕐 Programado para el ${when}`;
+    const reason = failed && s.fail_reason
+      ? `<div class="sched-reason">${esc(s.fail_reason)}</div>` : '';
+    const actions = failed
+      ? `<div class="sched-actions">
+           <button class="sched-edit-btn" data-id="${s.id}">Reprogramar</button>
+           <button class="sched-del-btn" data-id="${s.id}">Descartar</button>
+         </div>`
+      : `<div class="sched-actions">
+           <button class="sched-edit-btn" data-id="${s.id}">✏️ Editar</button>
+           <button class="sched-del-btn" data-id="${s.id}">✕ Cancelar</button>
+         </div>`;
+    return `
+      <div class="msg-bubble outgoing scheduled ${failed ? 'sched-failed' : ''}" data-sched-id="${s.id}">
+        <span class="sched-badge">${badge}</span>
+        <div class="msg-original">${esc(s.text_es)}</div>
+        ${reason}
+        ${actions}
+      </div>`;
+  }).join('');
 }
 
 /* ── Renderizado: quick replies ─────────────────────── */
@@ -214,9 +278,8 @@ function renderQuickReplies() {
 /* ── Tareas pendientes ──────────────────────────────── */
 async function loadTasks() {
   try {
-    const rows = await fetch('/api/tasks').then(r => r.json());
-    state.tasks = rows;
-    renderTasks();
+    const rows = await apiFetch('/api/tasks');
+    if (Array.isArray(rows)) { state.tasks = rows; renderTasks(); }
   } catch (e) { console.error('Error cargando tareas', e); }
 }
 
@@ -228,7 +291,10 @@ async function addTask(msg, conv) {
   try {
     const res = await fetch('/api/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + localStorage.getItem('chatlink_token'),
+      },
       body: JSON.stringify({
         msg_id: msg.id,
         guest_name: conv.guest_name || conv.guest_phone,
@@ -245,7 +311,7 @@ async function addTask(msg, conv) {
 
 async function removeTask(id) {
   try {
-    await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+    await apiFetch(`/api/tasks/${id}`, { method: 'DELETE' });
     state.tasks = state.tasks.filter(t => t.id !== id);
     renderTasks();
   } catch (e) { showToast('Error al eliminar tarea'); }
@@ -253,7 +319,7 @@ async function removeTask(id) {
 
 async function togglePriority(id) {
   try {
-    await fetch(`/api/tasks/${id}/priority`, { method: 'PATCH' });
+    await apiFetch(`/api/tasks/${id}/priority`, { method: 'PATCH' });
     const task = state.tasks.find(t => t.id === id);
     if (task) { task.priority = !task.priority; renderTasks(); }
   } catch (e) { showToast('Error al cambiar prioridad'); }
@@ -314,7 +380,9 @@ async function selectConversation(id) {
   }
 
   renderConvList();
+  state.scheduled = [];
   await loadMessages(id);
+  await loadScheduled(id);
 }
 
 /* ── Enviar respuesta ───────────────────────────────── */
@@ -333,6 +401,147 @@ async function sendReply() {
   sendBtn.disabled = false;
   msgInput.focus();
 }
+
+/* ── Programar mensaje ──────────────────────────────── */
+const scheduleModal   = $('schedule-modal');
+const scheduleOverlay = $('schedule-overlay');
+
+// Convierte una fecha a formato del input datetime-local (hora local)
+function toLocalInputValue(date) {
+  const d = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return d.toISOString().slice(0, 16);
+}
+
+// Abre el modal. Sin id → programar nuevo (con el texto de la caja);
+// con id → editar/reprogramar uno existente.
+function openScheduleModal(schedId = null) {
+  if (!state.activeConvId) { showToast('Selecciona una conversación primero'); return; }
+
+  editingScheduledId = schedId;
+  const textArea = $('schedule-text');
+  const dtInput  = $('schedule-datetime');
+
+  if (schedId) {
+    const sm = state.scheduled.find(s => s.id === schedId);
+    if (!sm) return;
+    textArea.value = sm.text_es;
+    const sendAt = new Date(sm.send_at);
+    dtInput.value = toLocalInputValue(sendAt > new Date() ? sendAt : new Date(Date.now() + 3600000));
+    $('schedule-title').textContent = '🕐 Editar mensaje programado';
+    $('schedule-save').textContent  = 'Guardar cambios';
+  } else {
+    textArea.value = msgInput.value.trim();
+    dtInput.value  = toLocalInputValue(new Date(Date.now() + 3600000)); // por defecto: dentro de 1h
+    $('schedule-title').textContent = '🕐 Programar mensaje';
+    $('schedule-save').textContent  = 'Programar';
+  }
+
+  dtInput.min = toLocalInputValue(new Date());
+  updateScheduleWarning();
+  scheduleModal.classList.remove('hidden');
+  scheduleOverlay.classList.remove('hidden');
+  textArea.focus();
+}
+
+function closeScheduleModal() {
+  scheduleModal.classList.add('hidden');
+  scheduleOverlay.classList.add('hidden');
+  editingScheduledId = null;
+}
+
+// Aviso de la ventana de 24h de WhatsApp: si a la hora elegida el cliente
+// llevará más de 24h sin escribir, el envío puede fallar (Telegram no tiene límite)
+function updateScheduleWarning() {
+  const warning = $('schedule-warning');
+  const conv = state.conversations.find(c => c.id === state.activeConvId);
+  const value = $('schedule-datetime').value;
+  if (!conv || !value || conv.channel === 'telegram') {
+    warning.classList.add('hidden');
+    return;
+  }
+  const sendAt = new Date(value);
+  const lastIncoming = [...state.messages].reverse().find(m => m.direction === 'incoming');
+  let windowClosed;
+  if (!lastIncoming) {
+    windowClosed = true; // nunca ha escrito: la ventana no está abierta
+  } else {
+    const ts = lastIncoming.created_at.endsWith('Z') ? lastIncoming.created_at : lastIncoming.created_at + 'Z';
+    windowClosed = sendAt.getTime() > new Date(ts).getTime() + 24 * 3600 * 1000;
+  }
+  warning.classList.toggle('hidden', !windowClosed);
+}
+
+async function saveScheduled() {
+  const text  = $('schedule-text').value.trim();
+  const value = $('schedule-datetime').value;
+  if (!text)  { showToast('Escribe el mensaje a programar'); return; }
+  if (!value) { showToast('Elige fecha y hora de envío'); return; }
+  const sendAt = new Date(value);
+  if (sendAt <= new Date()) { showToast('La fecha debe ser futura'); return; }
+
+  const body = {
+    conversation_id: state.activeConvId,
+    text,
+    lang_override: $('lang-override').value,
+    send_at: sendAt.toISOString(),
+  };
+
+  let result;
+  if (editingScheduledId) {
+    result = await apiFetch(`/api/scheduled/${editingScheduledId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    // Al reprogramar un fallido, el servidor lo rechaza (solo edita pendientes):
+    // en ese caso se crea uno nuevo y se descarta el fallido
+    if (!result) {
+      const old = state.scheduled.find(s => s.id === editingScheduledId);
+      if (old && old.status === 'failed') {
+        result = await apiFetch('/api/scheduled', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (result) await apiFetch(`/api/scheduled/${old.id}`, { method: 'DELETE' });
+      }
+    }
+  } else {
+    result = await apiFetch('/api/scheduled', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  if (!result) { showToast('No se pudo guardar el mensaje programado'); return; }
+
+  if (!editingScheduledId) { msgInput.value = ''; autoResize(); }
+  closeScheduleModal();
+  await loadScheduled(state.activeConvId);
+  const when = sendAt.toLocaleString('es-ES', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+  showToast(`🕐 Mensaje programado para el ${when}`);
+}
+
+async function cancelScheduled(id) {
+  const sm = state.scheduled.find(s => s.id === id);
+  const verb = sm && sm.status === 'failed' ? 'descartar este mensaje fallido' : 'cancelar este mensaje programado';
+  if (!confirm('¿Seguro que quieres ' + verb + '?')) return;
+  const result = await apiFetch(`/api/scheduled/${id}`, { method: 'DELETE' });
+  if (result) {
+    state.scheduled = state.scheduled.filter(s => s.id !== id);
+    renderMessages();
+    showToast(sm && sm.status === 'failed' ? 'Mensaje descartado' : 'Envío programado cancelado');
+  }
+}
+
+$('schedule-btn').addEventListener('click', () => openScheduleModal());
+$('schedule-save').addEventListener('click', saveScheduled);
+$('schedule-cancel').addEventListener('click', closeScheduleModal);
+$('schedule-close').addEventListener('click', closeScheduleModal);
+scheduleOverlay.addEventListener('click', closeScheduleModal);
+$('schedule-datetime').addEventListener('change', updateScheduleWarning);
+$('schedule-datetime').addEventListener('input', updateScheduleWarning);
 
 /* ── Demo ───────────────────────────────────────────── */
 $('demo-send-btn').addEventListener('click', async () => {
@@ -468,6 +677,10 @@ async function apiFetch(url, options = {}) {
     options.headers = { ...(options.headers || {}), 'Authorization': `Bearer ${token}` };
     const r = await fetch(url, options);
     if (r.status === 401) { localStorage.removeItem('chatlink_token'); window.location.href = '/login.html'; return null; }
+    if (r.status === 403) {
+      const body = await r.clone().json().catch(() => ({}));
+      if (body.code === 'MUST_CHANGE_PASSWORD') { window.location.href = '/change-password.html'; return null; }
+    }
     if (!r.ok) throw new Error(r.statusText);
     return r.json();
   } catch (e) {

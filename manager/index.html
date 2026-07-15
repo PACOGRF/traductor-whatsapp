@@ -78,6 +78,7 @@
           <option value="ro">Rumano</option>
           <option value="tr">Turco</option>
         </select>
+        <button id="schedule-btn" title="Programar envío">🕐</button>
         <button id="send-btn" title="Enviar">➤</button>
       </div>
     </div>
@@ -109,6 +110,33 @@
 </details>
 
 
+<!-- Modal: programar mensaje -->
+<div id="schedule-overlay" class="hidden"></div>
+<div id="schedule-modal" class="hidden">
+  <div id="schedule-header">
+    <span id="schedule-title">🕐 Programar mensaje</span>
+    <button id="schedule-close">✕</button>
+  </div>
+  <div id="schedule-body">
+    <label for="schedule-text">Mensaje (en español, se traduce al enviar)</label>
+    <textarea id="schedule-text" rows="3" placeholder="Escribe el mensaje…"></textarea>
+
+    <label for="schedule-datetime">Fecha y hora de envío</label>
+    <input type="datetime-local" id="schedule-datetime">
+
+    <div id="schedule-warning" class="hidden">
+      ⚠️ WhatsApp solo permite responder hasta 24&nbsp;h después del último mensaje del cliente.
+      A la hora elegida esa ventana estará cerrada y <strong>el envío puede fallar</strong>.
+      Si falla, lo verás marcado en rojo en el hilo.
+    </div>
+
+    <div id="schedule-actions">
+      <button id="schedule-cancel">Cancelar</button>
+      <button id="schedule-save">Programar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Panel lateral de plantillas -->
 <div id="templates-panel" class="hidden">
   <div id="templates-header">
@@ -136,7 +164,12 @@
   if (!('serviceWorker' in navigator)) return;
   const reg = await navigator.serviceWorker.register('/sw.js');
   const notifBtn = document.getElementById('notif-btn');
-  const { key: vapidKey } = await fetch('/api/vapid-public-key').then(r => r.json());
+  // Cabeceras con el token JWT (la API está protegida desde el login)
+  const authHeaders = {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer ' + localStorage.getItem('chatlink_token'),
+  };
+  const { key: vapidKey } = await fetch('/api/vapid-public-key', { headers: authHeaders }).then(r => r.json());
   if (!vapidKey) return;
 
   function urlBase64ToUint8Array(base64) {
@@ -152,7 +185,7 @@
     });
     await fetch('/api/push-subscribe', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders,
       body: JSON.stringify(sub),
     });
     notifBtn.textContent = '🔔 Avisos activados';
@@ -163,7 +196,7 @@
   if (existing) {
     await fetch('/api/push-subscribe', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders,
       body: JSON.stringify(existing),
     });
     notifBtn.style.display = 'block';

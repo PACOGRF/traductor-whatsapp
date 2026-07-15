@@ -159,9 +159,10 @@
         });
 
         if (res.ok) {
-          const { token } = await res.json();
-          localStorage.setItem('chatlink_token', token);
-          window.location.href = '/';
+          const data = await res.json();
+          localStorage.setItem('chatlink_token', data.token);
+          // Primer login: cambio de contraseña obligatorio (D5)
+          window.location.href = data.must_change_password ? '/change-password.html' : '/';
         } else {
           const { error } = await res.json();
           errorMsg.textContent = error || 'Error al iniciar sesión';

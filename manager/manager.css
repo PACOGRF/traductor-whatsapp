@@ -424,6 +424,115 @@ body {
 #send-btn:hover { background: var(--green-mid); }
 #send-btn:disabled { background: #ccc; cursor: not-allowed; }
 
+#schedule-btn {
+  background: rgba(255,255,255,0.12);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 44px; height: 44px;
+  color: white;
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+#schedule-btn:hover { background: var(--green-mid); }
+
+/* ── Modal: programar mensaje ─────────────────────────── */
+#schedule-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+  z-index: 400;
+}
+#schedule-overlay.hidden { display: none; }
+
+#schedule-modal {
+  position: fixed; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(420px, calc(100vw - 2rem));
+  background: white;
+  border-radius: 12px;
+  z-index: 401;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+  overflow: hidden;
+}
+#schedule-modal.hidden { display: none; }
+
+#schedule-header {
+  background: var(--green-dark);
+  color: white;
+  padding: 0 1rem;
+  height: var(--header-h);
+  display: flex; align-items: center; justify-content: space-between;
+  font-weight: 600;
+}
+#schedule-close {
+  background: none; border: none; color: white;
+  font-size: 1.1rem; cursor: pointer; padding: 4px;
+}
+
+#schedule-body { padding: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+#schedule-body label { font-size: 0.8rem; font-weight: 600; color: #444; }
+#schedule-body textarea, #schedule-body input[type="datetime-local"] {
+  width: 100%;
+  border: 1.5px solid #ddd;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  outline: none;
+}
+#schedule-body textarea:focus, #schedule-body input:focus { border-color: var(--green-mid); }
+#schedule-body textarea { resize: vertical; }
+
+#schedule-warning {
+  background: #fff8e1;
+  border: 1px solid #f0d47a;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  color: #7a5c00;
+}
+#schedule-warning.hidden { display: none; }
+
+#schedule-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.5rem; }
+#schedule-cancel {
+  background: none; border: 1px solid #ccc; border-radius: 8px;
+  padding: 8px 14px; font-size: 0.85rem; cursor: pointer; color: #555;
+}
+#schedule-save {
+  background: var(--green-dark); color: white;
+  border: none; border-radius: 8px;
+  padding: 8px 16px; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+}
+#schedule-save:hover { background: var(--green-mid); }
+
+/* ── Mensajes programados en el hilo ──────────────────── */
+.msg-bubble.scheduled {
+  border: 1.5px dashed var(--green-mid);
+  background: #f2faf7;
+  opacity: 0.95;
+}
+.msg-bubble.scheduled.sched-failed {
+  border-color: #e53935;
+  background: #fdf1f0;
+}
+.sched-badge {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--green-mid);
+  margin-bottom: 4px;
+}
+.sched-failed .sched-badge { color: #e53935; }
+.sched-reason { font-size: 0.75rem; color: #b3362f; margin-top: 4px; }
+.sched-actions { margin-top: 6px; display: flex; gap: 6px; justify-content: flex-end; }
+.sched-actions button {
+  background: none; border: 1px solid #ccc; border-radius: 6px;
+  padding: 2px 8px; font-size: 0.75rem; cursor: pointer; color: #555;
+}
+.sched-actions button:hover { border-color: var(--green-mid); color: var(--green-mid); }
+.sched-actions .sched-del-btn:hover { border-color: #e53935; color: #e53935; }
+
 /* ── Panel derecho: tareas pendientes ────────────────── */
 #tasks-panel {
   background: var(--panel-bg);

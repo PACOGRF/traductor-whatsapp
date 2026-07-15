@@ -167,6 +167,92 @@ router.delete('/tasks/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Mensajes programados ───────────────────────────────
+// Pendientes y fallidos de una conversación (para mostrar en el hilo)
+router.get('/conversations/:id/scheduled', async (req, res) => {
+  try {
+    const rows = await db.all(
+      `SELECT * FROM scheduled_messages
+       WHERE conversation_id = ? AND status IN ('pending', 'failed')
+       ORDER BY send_at ASC`,
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Programar un mensaje nuevo
+router.post('/scheduled', async (req, res) => {
+  try {
+    const { conversation_id, text, lang_override, send_at } = req.body;
+    if (!conversation_id || !text || !text.trim() || !send_at) {
+      return res.status(400).json({ error: 'Faltan datos: conversación, texto y fecha de envío' });
+    }
+    const sendAt = new Date(send_at);
+    if (isNaN(sendAt.getTime()) || sendAt <= new Date()) {
+      return res.status(400).json({ error: 'La fecha de envío debe ser futura' });
+    }
+    const conv = await db.get('SELECT * FROM conversations WHERE id = ?', [conversation_id]);
+    if (!conv) return res.status(404).json({ error: 'Conversación no encontrada' });
+
+    await db.run(
+      `INSERT INTO scheduled_messages (company_id, conversation_id, created_by, text_es, lang_override, send_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [req.user?.company_id || 1, conversation_id, req.user?.user_id || null,
+       text.trim(), lang_override || 'auto', sendAt.toISOString()]
+    );
+    const row = await db.get('SELECT * FROM scheduled_messages ORDER BY id DESC LIMIT 1');
+
+    const { logAudit } = require('../services/audit');
+    await logAudit(req.user?.company_id, req.user?.user_id, 'scheduled_message_created',
+      { scheduled_id: row.id, conversation_id, send_at: sendAt.toISOString() });
+
+    res.json(row);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Editar un mensaje programado (solo si sigue pendiente)
+router.put('/scheduled/:id', async (req, res) => {
+  try {
+    const sm = await db.get('SELECT * FROM scheduled_messages WHERE id = ?', [req.params.id]);
+    if (!sm) return res.status(404).json({ error: 'No encontrado' });
+    if (sm.status !== 'pending') {
+      return res.status(409).json({ error: 'Este mensaje ya no se puede editar (estado: ' + sm.status + ')' });
+    }
+    const { text, lang_override, send_at } = req.body;
+    const sendAt = new Date(send_at || sm.send_at);
+    if (!text || !text.trim()) return res.status(400).json({ error: 'El texto no puede estar vacío' });
+    if (isNaN(sendAt.getTime()) || sendAt <= new Date()) {
+      return res.status(400).json({ error: 'La fecha de envío debe ser futura' });
+    }
+    await db.run(
+      `UPDATE scheduled_messages
+       SET text_es = ?, lang_override = ?, send_at = ?, updated_at = NOW() WHERE id = ?`,
+      [text.trim(), lang_override || sm.lang_override, sendAt.toISOString(), req.params.id]
+    );
+    const row = await db.get('SELECT * FROM scheduled_messages WHERE id = ?', [req.params.id]);
+    res.json(row);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Cancelar un mensaje programado (borrado lógico: queda con estado cancelled)
+router.delete('/scheduled/:id', async (req, res) => {
+  try {
+    const sm = await db.get('SELECT * FROM scheduled_messages WHERE id = ?', [req.params.id]);
+    if (!sm) return res.status(404).json({ error: 'No encontrado' });
+    if (sm.status === 'sent') return res.status(409).json({ error: 'Ya se envió, no se puede cancelar' });
+
+    await db.run(
+      `UPDATE scheduled_messages SET status = 'cancelled', updated_at = NOW() WHERE id = ?`,
+      [req.params.id]
+    );
+    const { logAudit } = require('../services/audit');
+    await logAudit(req.user?.company_id, req.user?.user_id, 'scheduled_message_cancelled',
+      { scheduled_id: sm.id, conversation_id: sm.conversation_id });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // URL de reservas
 router.get('/booking-url', (req, res) => {
   res.json({ url: process.env.BOOKING_URL || 'https://tu-web.com/reservas' });

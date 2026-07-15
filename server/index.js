@@ -26,19 +26,8 @@ const webhookRouter = require('./routes/webhook');
 webhookRouter.io = io;
 app.use('/webhook', webhookRouter);
 
-// Middleware JWT — protege /api y el panel
-const jwt = require('jsonwebtoken');
-function requireAuth(req, res, next) {
-  const auth = req.headers['authorization'];
-  const token = auth && auth.startsWith('Bearer ') ? auth.slice(7) : null;
-  if (!token) return res.status(401).json({ error: 'No autenticado' });
-  try {
-    req.user = jwt.verify(token, process.env.JWT_SECRET || 'chatlink_secret');
-    next();
-  } catch {
-    res.status(401).json({ error: 'Token inválido o caducado' });
-  }
-}
+// Middleware JWT — protege /api (verifica token, sesión antigua y cambio de contraseña pendiente)
+const { requireAuth } = require('./middleware/auth');
 
 const apiRouter = require('./routes/api');
 app.use('/api', requireAuth, apiRouter);
@@ -75,9 +64,13 @@ app.get('/config.js', (req, res) => {
 const registerChatHandlers = require('./sockets/chatHandler');
 registerChatHandlers(io, app);
 
-// Arranque del servidor (inicializa la BD primero)
+// Arranque del servidor (inicializa la BD, aplica migraciones, crea gestor inicial y cron)
 async function start() {
   await db.getDb();
+  const { bootstrapAdmin } = require('./db/bootstrap');
+  await bootstrapAdmin();
+  const { startCronJobs } = require('./services/cronJobs');
+  startCronJobs(io, app);
   server.listen(PORT, () => {
     console.log('');
     console.log('🚀 Servidor arrancado en http://localhost:' + PORT);
