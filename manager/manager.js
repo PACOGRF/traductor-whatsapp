@@ -69,12 +69,13 @@ socket.on('message_sent', ({ conversation, message }) => {
   }
 });
 
-// Un cliente compartió su contacto: se creó su ficha automáticamente
+// Ficha de cliente guardada o vinculada (tras confirmar, o cliente ya conocido)
 socket.on('contact_saved', ({ conversation_id, name, phone }) => {
   const conv = state.conversations.find(c => c.id === conversation_id);
   if (conv) {
     conv.contact_name = name;
     conv.contact_phone = phone;
+    conv.pending_contact = null;
     renderConvList();
     // Refrescar la cabecera si es la conversación abierta
     if (state.activeConvId === conversation_id) {
@@ -83,7 +84,14 @@ socket.on('contact_saved', ({ conversation_id, name, phone }) => {
       chatGuestName.textContent = `✈️ ${name} · ${phone} · Telegram${langSuffix}`;
     }
   }
-  showToast(`🆕 Cliente guardado en fichas: ${name} (${phone})`, 5000);
+  showToast(`✅ Cliente en fichas: ${name} (${phone})`, 5000);
+});
+
+// Un cliente compartió su contacto: preguntar al gestor si crear la ficha
+socket.on('contact_pending', ({ conversation_id, name, phone }) => {
+  const conv = state.conversations.find(c => c.id === conversation_id);
+  if (conv) conv.pending_contact = { name, phone };
+  openContactModal(conversation_id, { name, phone });
 });
 
 // Un mensaje programado se envió: quitarlo de la lista de pendientes
@@ -406,6 +414,11 @@ async function selectConversation(id) {
   state.scheduled = [];
   await loadMessages(id);
   await loadScheduled(id);
+
+  // Propuesta de ficha pendiente (llegó estando desconectado): preguntar ahora
+  if (conv.pending_contact && !conv.contact_id) {
+    openContactModal(conv.id, conv.pending_contact);
+  }
 }
 
 /* ── Enviar respuesta ───────────────────────────────── */
@@ -565,6 +578,79 @@ $('schedule-close').addEventListener('click', closeScheduleModal);
 scheduleOverlay.addEventListener('click', closeScheduleModal);
 $('schedule-datetime').addEventListener('change', updateScheduleWarning);
 $('schedule-datetime').addEventListener('input', updateScheduleWarning);
+
+/* ── Ficha de cliente (contacto compartido) ─────────── */
+let contactModalConvId = null;
+
+// Abre el aviso "¿guardar cliente?" con los datos propuestos
+function openContactModal(convId, pending) {
+  const pc = typeof pending === 'string' ? JSON.parse(pending) : pending;
+  if (!pc || !pc.phone) return;
+
+  contactModalConvId = convId;
+  $('contact-question-text').textContent =
+    `${pc.name || 'Un cliente'} ha compartido su contacto (${pc.phone}). ¿Quieres guardarlo en tus fichas de clientes?`;
+  $('contact-name').value    = pc.name || '';
+  $('contact-phone').value   = pc.phone || '';
+  $('contact-company').value = '';
+  $('contact-notes').value   = '';
+
+  $('contact-question').classList.remove('hidden');
+  $('contact-form').classList.add('hidden');
+  $('contact-modal').classList.remove('hidden');
+  $('contact-overlay').classList.remove('hidden');
+}
+
+// Cerrar sin decidir: la propuesta sigue pendiente y reaparece al abrir la conversación
+function closeContactModal() {
+  $('contact-modal').classList.add('hidden');
+  $('contact-overlay').classList.add('hidden');
+  contactModalConvId = null;
+}
+
+// "Sí, crear ficha" → mostrar el formulario precumplimentado y editable
+$('contact-yes').addEventListener('click', () => {
+  $('contact-question').classList.add('hidden');
+  $('contact-form').classList.remove('hidden');
+  $('contact-name').focus();
+});
+
+// "No guardar" → descartar la propuesta definitivamente
+$('contact-no').addEventListener('click', async () => {
+  const convId = contactModalConvId;
+  closeContactModal();
+  if (!convId) return;
+  await apiFetch(`/api/conversations/${convId}/pending-contact`, { method: 'DELETE' });
+  const conv = state.conversations.find(c => c.id === convId);
+  if (conv) conv.pending_contact = null;
+  showToast('No se ha guardado. Los datos quedan visibles en el hilo.');
+});
+
+// "Guardar cliente" → crear la ficha con los datos editados
+$('contact-save').addEventListener('click', async () => {
+  const name  = $('contact-name').value.trim();
+  const phone = $('contact-phone').value.trim();
+  if (!name || !phone) { showToast('Nombre y teléfono son obligatorios'); return; }
+
+  const result = await apiFetch('/api/contacts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      conversation_id: contactModalConvId,
+      name,
+      phone,
+      company_name: $('contact-company').value.trim() || null,
+      permanent_notes: $('contact-notes').value.trim() || null,
+    }),
+  });
+  if (!result) { showToast('No se pudo guardar la ficha'); return; }
+  closeContactModal();
+  // El evento contact_saved del servidor actualiza lista, cabecera y muestra el toast
+});
+
+$('contact-cancel').addEventListener('click', closeContactModal);
+$('contact-close').addEventListener('click', closeContactModal);
+$('contact-overlay').addEventListener('click', closeContactModal);
 
 /* ── Canal Telegram (configuración, solo GESTOR) ────── */
 async function initTelegramPanel() {

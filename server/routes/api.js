@@ -226,6 +226,65 @@ router.post('/telegram/config', requireRole('manager'), async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Fichas de clientes (contacts) ──────────────────────
+// Crear/actualizar la ficha de un cliente (p. ej. al confirmar un contacto
+// compartido por Telegram). Vincula la conversación y limpia la propuesta.
+router.post('/contacts', async (req, res) => {
+  try {
+    const { conversation_id, name, phone, company_name, permanent_notes } = req.body;
+    if (!name || !name.trim() || !phone || !phone.trim()) {
+      return res.status(400).json({ error: 'Nombre y teléfono son obligatorios' });
+    }
+    const companyId = req.user?.company_id || 1;
+    const cleanPhone = phone.trim();
+
+    let contact = await db.get(
+      'SELECT * FROM contacts WHERE company_id = ? AND phone = ?',
+      [companyId, cleanPhone]
+    );
+    if (contact) {
+      await db.run(
+        'UPDATE contacts SET name = ?, company_name = ?, permanent_notes = ? WHERE id = ?',
+        [name.trim(), company_name || contact.company_name, permanent_notes || contact.permanent_notes, contact.id]
+      );
+    } else {
+      await db.run(
+        'INSERT INTO contacts (company_id, phone, name, company_name, permanent_notes) VALUES (?, ?, ?, ?, ?)',
+        [companyId, cleanPhone, name.trim(), company_name || null, permanent_notes || null]
+      );
+    }
+    contact = await db.get('SELECT * FROM contacts WHERE company_id = ? AND phone = ?', [companyId, cleanPhone]);
+
+    if (conversation_id) {
+      await db.run(
+        'UPDATE conversations SET contact_id = ?, pending_contact = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [contact.id, conversation_id]
+      );
+    }
+
+    const { logAudit } = require('../services/audit');
+    await logAudit(companyId, req.user?.user_id, 'contact_created',
+      { contact_id: contact.id, conversation_id: conversation_id || null, phone: cleanPhone });
+
+    const io = req.app.get('io');
+    if (io && conversation_id) {
+      io.emit('contact_saved', { conversation_id, name: contact.name, phone: contact.phone });
+    }
+    res.json(contact);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Descartar la propuesta de contacto de una conversación (el gestor dijo que no)
+router.delete('/conversations/:id/pending-contact', async (req, res) => {
+  try {
+    await db.run('UPDATE conversations SET pending_contact = NULL WHERE id = ?', [req.params.id]);
+    const { logAudit } = require('../services/audit');
+    await logAudit(req.user?.company_id, req.user?.user_id, 'contact_declined',
+      { conversation_id: Number(req.params.id) });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Mensajes programados ───────────────────────────────
 // Pendientes y fallidos de una conversación (para mostrar en el hilo)
 router.get('/conversations/:id/scheduled', async (req, res) => {

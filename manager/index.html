@@ -147,6 +147,45 @@
   </div>
 </div>
 
+<!-- Modal: ficha de cliente (contacto compartido por Telegram) -->
+<div id="contact-overlay" class="hidden"></div>
+<div id="contact-modal" class="hidden">
+  <div id="contact-header">
+    <span id="contact-title">🆕 Nuevo cliente</span>
+    <button id="contact-close">✕</button>
+  </div>
+  <div id="contact-body">
+
+    <div id="contact-question">
+      <p id="contact-question-text"></p>
+      <div class="contact-actions">
+        <button id="contact-no" class="btn-secondary">No guardar</button>
+        <button id="contact-yes" class="btn-primary">Sí, crear ficha</button>
+      </div>
+    </div>
+
+    <div id="contact-form" class="hidden">
+      <label for="contact-name">Nombre*</label>
+      <input id="contact-name" type="text">
+
+      <label for="contact-phone">Teléfono*</label>
+      <input id="contact-phone" type="text">
+
+      <label for="contact-company">Empresa (opcional)</label>
+      <input id="contact-company" type="text">
+
+      <label for="contact-notes">Notas permanentes (opcional)</label>
+      <textarea id="contact-notes" rows="2" placeholder="Ej.: cliente del apartamento 3B, habla inglés…"></textarea>
+
+      <div class="contact-actions">
+        <button id="contact-cancel" class="btn-secondary">Ahora no</button>
+        <button id="contact-save" class="btn-primary">Guardar cliente</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <!-- Panel lateral de plantillas -->
 <div id="templates-panel" class="hidden">
   <div id="templates-header">

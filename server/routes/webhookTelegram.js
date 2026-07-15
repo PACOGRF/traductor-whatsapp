@@ -145,8 +145,8 @@ async function sendWelcome(app, company, conv) {
   }
 }
 
-// El cliente compartió su contacto: crear/vincular su ficha (tabla contacts),
-// avisar al panel y darle las gracias retirando el botón.
+// El cliente compartió su contacto: se PROPONE crear la ficha (el gestor decide).
+// Si el teléfono ya existe en las fichas de la empresa, se vincula sin preguntar.
 async function handleSharedContact(app, company, conv, tgMsg) {
   const c = tgMsg.contact;
   // Solo aceptar su PROPIO contacto (no tarjetas de terceros reenviadas)
@@ -157,30 +157,8 @@ async function handleSharedContact(app, company, conv, tgMsg) {
   if (!phone.startsWith('+')) phone = '+' + phone;
 
   const realName = [c.first_name, c.last_name].filter(Boolean).join(' ') || conv.guest_name;
-
-  // Ficha: buscar por teléfono; si no existe, crearla con los datos verificados
-  let contact = await db.get(
-    'SELECT * FROM contacts WHERE company_id = ? AND phone = ?',
-    [company.id, phone]
-  );
-  let created = false;
-  if (!contact) {
-    await db.run(
-      'INSERT INTO contacts (company_id, phone, name) VALUES (?, ?, ?)',
-      [company.id, phone, realName]
-    );
-    contact = await db.get('SELECT * FROM contacts WHERE company_id = ? AND phone = ?', [company.id, phone]);
-    created = true;
-  }
-
-  await db.run(
-    'UPDATE conversations SET contact_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [contact.id, conv.id]
-  );
-
+  const io = app.get('io');
   const { logAudit } = require('../services/audit');
-  await logAudit(company.id, null, created ? 'contact_autocreated' : 'contact_linked',
-    { contact_id: contact.id, conversation_id: conv.id, phone, name: realName });
 
   // Constancia visible en el hilo
   await db.run(
@@ -188,13 +166,34 @@ async function handleSharedContact(app, company, conv, tgMsg) {
     [conv.id, 'incoming', `📱 Contacto compartido: ${realName} — ${phone}`]
   );
   const msg = await db.get('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1', [conv.id]);
+  if (io) io.emit('new_message', { conversation: conv, message: msg });
 
-  const io = app.get('io');
-  if (io) {
-    io.emit('new_message', { conversation: conv, message: msg });
-    io.emit('contact_saved', { conversation_id: conv.id, name: realName, phone });
+  const existing = await db.get(
+    'SELECT * FROM contacts WHERE company_id = ? AND phone = ?',
+    [company.id, phone]
+  );
+
+  if (existing) {
+    // Cliente ya conocido: vincular su ficha sin molestar al gestor
+    await db.run(
+      'UPDATE conversations SET contact_id = ?, pending_contact = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [existing.id, conv.id]
+    );
+    await logAudit(company.id, null, 'contact_linked',
+      { contact_id: existing.id, conversation_id: conv.id, phone });
+    if (io) io.emit('contact_saved', { conversation_id: conv.id, name: existing.name, phone: existing.phone });
+    await sendPush(app, { title: '📱 Cliente reconocido', body: `${existing.name} — ${existing.phone}` });
+  } else {
+    // Cliente nuevo: guardar la propuesta y preguntar al gestor en el panel
+    await db.run(
+      'UPDATE conversations SET pending_contact = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [JSON.stringify({ name: realName, phone }), conv.id]
+    );
+    await logAudit(company.id, null, 'contact_share_received',
+      { conversation_id: conv.id, phone, name: realName });
+    if (io) io.emit('contact_pending', { conversation_id: conv.id, name: realName, phone });
+    await sendPush(app, { title: '📱 Contacto recibido', body: `${realName} — ${phone} · ¿Crear su ficha de cliente?` });
   }
-  await sendPush(app, { title: '🆕 Nuevo cliente guardado', body: `${realName} — ${phone}` });
 
   // Gracias en su idioma + retirar el botón
   let thanks = '¡Gracias! Hemos guardado su contacto. ¿En qué podemos ayudarle?';
