@@ -81,40 +81,50 @@ router.post('/telegram/:companyId', express.json(), async (req, res) => {
     }
     if (!body) return;
 
-    // Mismo flujo que WhatsApp: detectar idioma → traducir al español
-    const { translatedText, detectedLanguage: detectedLang } = await translateWithDetection(body, 'es');
+    // Los comandos de Telegram (/start, etc.) no son texto del cliente:
+    // no se guardan ni se pasan al detector de idioma (falseaba el idioma)
+    const isCommand = body.startsWith('/');
 
-    if (detectedLang && detectedLang !== conv.guest_language) {
+    if (!isCommand) {
+      // Mismo flujo que WhatsApp: detectar idioma → traducir al español
+      const { translatedText, detectedLanguage: detectedLang } = await translateWithDetection(body, 'es');
+
+      if (detectedLang && detectedLang !== conv.guest_language) {
+        await db.run(
+          'UPDATE conversations SET guest_language = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [detectedLang, conv.id]
+        );
+        conv.guest_language = detectedLang;
+      }
       await db.run(
-        'UPDATE conversations SET guest_language = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [detectedLang, conv.id]
+        'UPDATE conversations SET last_incoming_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [conv.id]
       );
-      conv.guest_language = detectedLang;
+
+      await db.run(
+        'INSERT INTO messages (conversation_id, direction, original_text, translated_text, language_detected) VALUES (?, ?, ?, ?, ?)',
+        [conv.id, 'incoming', body, translatedText, detectedLang]
+      );
+      const msg = await db.get(
+        'SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1',
+        [conv.id]
+      );
+
+      const io = req.app.get('io');
+      if (io) io.emit('new_message', { conversation: conv, message: msg });
+
+      await sendPush(req.app, {
+        title: `✈️ ${conv.guest_name || 'Cliente Telegram'}`,
+        body: msg.translated_text || msg.original_text,
+      });
     }
-    await db.run(
-      'UPDATE conversations SET last_incoming_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [conv.id]
-    );
 
-    await db.run(
-      'INSERT INTO messages (conversation_id, direction, original_text, translated_text, language_detected) VALUES (?, ?, ?, ?, ?)',
-      [conv.id, 'incoming', body, translatedText, detectedLang]
-    );
-    const msg = await db.get(
-      'SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1',
-      [conv.id]
-    );
-
-    const io = req.app.get('io');
-    if (io) io.emit('new_message', { conversation: conv, message: msg });
-
-    await sendPush(req.app, {
-      title: `✈️ ${conv.guest_name || 'Cliente Telegram'}`,
-      body: msg.translated_text || msg.original_text,
-    });
-
-    // Primera vez que escribe: bienvenida en su idioma + botón para compartir contacto
-    if (isNewConversation) await sendWelcome(req.app, company, conv);
+    // Primera vez que escribe: bienvenida en su idioma + botón para compartir
+    // contacto, y proponer al gestor guardar el cliente nuevo en fichas
+    if (isNewConversation) {
+      await sendWelcome(req.app, company, conv);
+      await proposeNewClient(req.app, conv);
+    }
   } catch (err) {
     console.error('Error en webhook Telegram:', err);
   }
@@ -145,8 +155,21 @@ async function sendWelcome(app, company, conv) {
   }
 }
 
-// El cliente compartió su contacto: se PROPONE crear la ficha (el gestor decide).
-// Si el teléfono ya existe en las fichas de la empresa, se vincula sin preguntar.
+// Cliente nuevo detectado: proponer al gestor guardarlo en fichas
+// (con el nombre del perfil; el teléfono llegará si comparte su contacto)
+async function proposeNewClient(app, conv) {
+  const pending = { name: conv.guest_name || 'Cliente Telegram', phone: null };
+  await db.run(
+    'UPDATE conversations SET pending_contact = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [JSON.stringify(pending), conv.id]
+  );
+  const io = app.get('io');
+  if (io) io.emit('contact_pending', { conversation_id: conv.id, name: pending.name, phone: null });
+  await sendPush(app, { title: '🆕 Cliente nuevo', body: `${pending.name} · ¿Guardar su ficha de cliente?` });
+}
+
+// El cliente compartió su contacto (teléfono verificado por Telegram).
+// Según el estado: completa su ficha, vincula una existente o actualiza la propuesta.
 async function handleSharedContact(app, company, conv, tgMsg) {
   const c = tgMsg.contact;
   // Solo aceptar su PROPIO contacto (no tarjetas de terceros reenviadas)
@@ -168,31 +191,44 @@ async function handleSharedContact(app, company, conv, tgMsg) {
   const msg = await db.get('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1', [conv.id]);
   if (io) io.emit('new_message', { conversation: conv, message: msg });
 
-  const existing = await db.get(
-    'SELECT * FROM contacts WHERE company_id = ? AND phone = ?',
-    [company.id, phone]
-  );
-
-  if (existing) {
-    // Cliente ya conocido: vincular su ficha sin molestar al gestor
-    await db.run(
-      'UPDATE conversations SET contact_id = ?, pending_contact = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [existing.id, conv.id]
-    );
-    await logAudit(company.id, null, 'contact_linked',
-      { contact_id: existing.id, conversation_id: conv.id, phone });
-    if (io) io.emit('contact_saved', { conversation_id: conv.id, name: existing.name, phone: existing.phone });
-    await sendPush(app, { title: '📱 Cliente reconocido', body: `${existing.name} — ${existing.phone}` });
+  if (conv.contact_id) {
+    // La conversación ya tiene ficha: completar el teléfono verificado
+    try {
+      await db.run('UPDATE contacts SET phone = ? WHERE id = ?', [phone, conv.contact_id]);
+    } catch (err) {
+      console.warn('⚠️ No se pudo actualizar el teléfono de la ficha:', err.message);
+    }
+    const ficha = await db.get('SELECT * FROM contacts WHERE id = ?', [conv.contact_id]);
+    await logAudit(company.id, null, 'contact_phone_verified',
+      { contact_id: conv.contact_id, conversation_id: conv.id, phone });
+    if (io && ficha) io.emit('contact_saved', { conversation_id: conv.id, name: ficha.name, phone: ficha.phone });
+    await sendPush(app, { title: '📱 Teléfono verificado', body: `${realName} — ${phone}` });
   } else {
-    // Cliente nuevo: guardar la propuesta y preguntar al gestor en el panel
-    await db.run(
-      'UPDATE conversations SET pending_contact = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [JSON.stringify({ name: realName, phone }), conv.id]
+    const existing = await db.get(
+      'SELECT * FROM contacts WHERE company_id = ? AND phone = ?',
+      [company.id, phone]
     );
-    await logAudit(company.id, null, 'contact_share_received',
-      { conversation_id: conv.id, phone, name: realName });
-    if (io) io.emit('contact_pending', { conversation_id: conv.id, name: realName, phone });
-    await sendPush(app, { title: '📱 Contacto recibido', body: `${realName} — ${phone} · ¿Crear su ficha de cliente?` });
+    if (existing) {
+      // Cliente ya conocido: vincular su ficha sin molestar al gestor
+      await db.run(
+        'UPDATE conversations SET contact_id = ?, pending_contact = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [existing.id, conv.id]
+      );
+      await logAudit(company.id, null, 'contact_linked',
+        { contact_id: existing.id, conversation_id: conv.id, phone });
+      if (io) io.emit('contact_saved', { conversation_id: conv.id, name: existing.name, phone: existing.phone });
+      await sendPush(app, { title: '📱 Cliente reconocido', body: `${existing.name} — ${existing.phone}` });
+    } else {
+      // Actualizar la propuesta pendiente con el teléfono y volver a avisar
+      await db.run(
+        'UPDATE conversations SET pending_contact = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [JSON.stringify({ name: realName, phone }), conv.id]
+      );
+      await logAudit(company.id, null, 'contact_share_received',
+        { conversation_id: conv.id, phone, name: realName });
+      if (io) io.emit('contact_pending', { conversation_id: conv.id, name: realName, phone });
+      await sendPush(app, { title: '📱 Contacto recibido', body: `${realName} — ${phone} · ¿Crear su ficha de cliente?` });
+    }
   }
 
   // Gracias en su idioma + retirar el botón

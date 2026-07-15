@@ -232,28 +232,38 @@ router.post('/telegram/config', requireRole('manager'), async (req, res) => {
 router.post('/contacts', async (req, res) => {
   try {
     const { conversation_id, name, phone, company_name, permanent_notes } = req.body;
-    if (!name || !name.trim() || !phone || !phone.trim()) {
-      return res.status(400).json({ error: 'Nombre y teléfono son obligatorios' });
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'El nombre es obligatorio' });
     }
     const companyId = req.user?.company_id || 1;
-    const cleanPhone = phone.trim();
+    const cleanPhone = (phone || '').trim() || null;   // teléfono opcional (llega si el cliente lo comparte)
 
-    let contact = await db.get(
-      'SELECT * FROM contacts WHERE company_id = ? AND phone = ?',
-      [companyId, cleanPhone]
-    );
+    // Resolver la ficha: la ya vinculada a la conversación > por teléfono > nueva
+    let contact = null;
+    const conv = conversation_id
+      ? await db.get('SELECT * FROM conversations WHERE id = ?', [conversation_id])
+      : null;
+    if (conv && conv.contact_id) {
+      contact = await db.get('SELECT * FROM contacts WHERE id = ?', [conv.contact_id]);
+    }
+    if (!contact && cleanPhone) {
+      contact = await db.get('SELECT * FROM contacts WHERE company_id = ? AND phone = ?', [companyId, cleanPhone]);
+    }
+
     if (contact) {
       await db.run(
-        'UPDATE contacts SET name = ?, company_name = ?, permanent_notes = ? WHERE id = ?',
-        [name.trim(), company_name || contact.company_name, permanent_notes || contact.permanent_notes, contact.id]
+        'UPDATE contacts SET name = ?, phone = ?, company_name = ?, permanent_notes = ? WHERE id = ?',
+        [name.trim(), cleanPhone || contact.phone, company_name || contact.company_name,
+         permanent_notes || contact.permanent_notes, contact.id]
       );
+      contact = await db.get('SELECT * FROM contacts WHERE id = ?', [contact.id]);
     } else {
       await db.run(
         'INSERT INTO contacts (company_id, phone, name, company_name, permanent_notes) VALUES (?, ?, ?, ?, ?)',
         [companyId, cleanPhone, name.trim(), company_name || null, permanent_notes || null]
       );
+      contact = await db.get('SELECT * FROM contacts WHERE company_id = ? ORDER BY id DESC LIMIT 1', [companyId]);
     }
-    contact = await db.get('SELECT * FROM contacts WHERE company_id = ? AND phone = ?', [companyId, cleanPhone]);
 
     if (conversation_id) {
       await db.run(

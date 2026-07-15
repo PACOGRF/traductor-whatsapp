@@ -81,7 +81,7 @@ socket.on('contact_saved', ({ conversation_id, name, phone }) => {
     if (state.activeConvId === conversation_id) {
       const langSuffix = conv.guest_language && conv.guest_language !== 'es'
         ? ` · habla ${langName(conv.guest_language)}` : '';
-      chatGuestName.textContent = `✈️ ${name} · ${phone} · Telegram${langSuffix}`;
+      chatGuestName.textContent = `✈️ ${name}${phone ? ' · ' + phone : ''} · Telegram${langSuffix}`;
     }
   }
   showToast(`✅ Cliente en fichas: ${name} (${phone})`, 5000);
@@ -585,11 +585,12 @@ let contactModalConvId = null;
 // Abre el aviso "¿guardar cliente?" con los datos propuestos
 function openContactModal(convId, pending) {
   const pc = typeof pending === 'string' ? JSON.parse(pending) : pending;
-  if (!pc || !pc.phone) return;
+  if (!pc || (!pc.name && !pc.phone)) return;
 
   contactModalConvId = convId;
-  $('contact-question-text').textContent =
-    `${pc.name || 'Un cliente'} ha compartido su contacto (${pc.phone}). ¿Quieres guardarlo en tus fichas de clientes?`;
+  $('contact-question-text').textContent = pc.phone
+    ? `${pc.name || 'Un cliente'} ha compartido su contacto (${pc.phone}). ¿Quieres guardarlo en tus fichas de clientes?`
+    : `${pc.name || 'Un cliente'} es un cliente nuevo. ¿Quieres guardarlo en tus fichas de clientes?`;
   $('contact-name').value    = pc.name || '';
   $('contact-phone').value   = pc.phone || '';
   $('contact-company').value = '';
@@ -630,7 +631,7 @@ $('contact-no').addEventListener('click', async () => {
 $('contact-save').addEventListener('click', async () => {
   const name  = $('contact-name').value.trim();
   const phone = $('contact-phone').value.trim();
-  if (!name || !phone) { showToast('Nombre y teléfono son obligatorios'); return; }
+  if (!name) { showToast('El nombre es obligatorio'); return; }
 
   const result = await apiFetch('/api/contacts', {
     method: 'POST',
@@ -822,6 +823,7 @@ function autoResize() {
 
 /* ── Nombres de idioma ──────────────────────────────── */
 const LANG_NAMES = {
+  es: 'español',
   en: 'inglés', fr: 'francés', de: 'alemán', it: 'italiano',
   pt: 'portugués', nl: 'neerlandés', ru: 'ruso', zh: 'chino',
   ja: 'japonés', ko: 'coreano', ar: 'árabe', pl: 'polaco',
