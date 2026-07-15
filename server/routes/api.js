@@ -167,6 +167,64 @@ router.delete('/tasks/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Configuración del canal Telegram (Sprint 1) ────────
+const { requireRole } = require('../middleware/auth');
+
+// Estado actual: ¿hay bot configurado para la empresa del usuario?
+router.get('/telegram/config', async (req, res) => {
+  try {
+    const companyId = req.user?.company_id || 1;
+    const company = await db.get('SELECT telegram_bot_token FROM companies WHERE id = ?', [companyId]);
+    if (!company || !company.telegram_bot_token) return res.json({ configured: false });
+
+    const { getMe } = require('../services/telegram');
+    const me = await getMe(company.telegram_bot_token);
+    if (!me.ok) return res.json({ configured: true, bot_username: null });
+    res.json({
+      configured: true,
+      bot_username: me.result.username,
+      link: 'https://t.me/' + me.result.username,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Guardar el token del bot y registrar el webhook (solo GESTOR)
+router.post('/telegram/config', requireRole('manager'), async (req, res) => {
+  try {
+    const token = (req.body.bot_token || '').trim();
+    if (!token) return res.status(400).json({ error: 'Pega el token del bot' });
+
+    const { getMe, setWebhook, webhookSecret } = require('../services/telegram');
+
+    // 1. Validar el token preguntando a Telegram quién es el bot
+    const me = await getMe(token);
+    if (!me.ok) {
+      return res.status(400).json({ error: 'Token no válido. Revisa que lo copiaste entero de @BotFather.' });
+    }
+
+    // 2. Guardar el token en la empresa del gestor
+    const companyId = req.user.company_id || 1;
+    await db.run('UPDATE companies SET telegram_bot_token = ? WHERE id = ?', [token, companyId]);
+
+    // 3. Registrar el webhook del bot apuntando a este servidor
+    const host = req.get('host');
+    const base = (host.includes('localhost') ? 'http' : 'https') + '://' + host;
+    const hook = await setWebhook(token, `${base}/webhook/telegram/${companyId}`, webhookSecret(token));
+    if (!hook.ok) {
+      return res.status(502).json({ error: 'Telegram rechazó el webhook: ' + (hook.description || 'error') });
+    }
+
+    const { logAudit } = require('../services/audit');
+    await logAudit(companyId, req.user.user_id, 'telegram_configured', { bot: me.result.username });
+
+    res.json({
+      ok: true,
+      bot_username: me.result.username,
+      link: 'https://t.me/' + me.result.username,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Mensajes programados ───────────────────────────────
 // Pendientes y fallidos de una conversación (para mostrar en el hilo)
 router.get('/conversations/:id/scheduled', async (req, res) => {

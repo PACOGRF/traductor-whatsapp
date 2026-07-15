@@ -26,6 +26,10 @@ const webhookRouter = require('./routes/webhook');
 webhookRouter.io = io;
 app.use('/webhook', webhookRouter);
 
+// Webhook público de Telegram (verifica secreto propio en cada petición)
+const webhookTelegramRouter = require('./routes/webhookTelegram');
+app.use('/webhook', webhookTelegramRouter);
+
 // Middleware JWT — protege /api (verifica token, sesión antigua y cambio de contraseña pendiente)
 const { requireAuth } = require('./middleware/auth');
 

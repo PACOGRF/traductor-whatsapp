@@ -98,6 +98,7 @@ async function init() {
   await loadConversations();
   await loadQuickReplies();
   await loadTasks();
+  await initTelegramPanel();
 
   // En escritorio el chat siempre visible; en móvil empieza oculto
   if (window.innerWidth > 768) {
@@ -142,7 +143,7 @@ function renderConvList() {
         <div class="conv-avatar">${initials}</div>
         <div class="conv-info">
           <div class="conv-name">
-            ${esc(c.guest_name || c.guest_phone)}
+            ${c.channel === 'telegram' ? '<span class="conv-channel" title="Telegram">✈️</span>' : ''}${esc(c.guest_name || c.guest_phone)}
             ${c.guest_language && c.guest_language !== 'es' ? `<span class="conv-lang">${langName(c.guest_language)}</span>` : ''}
           </div>
           <div class="conv-preview">${esc(preview)}</div>
@@ -542,6 +543,59 @@ $('schedule-close').addEventListener('click', closeScheduleModal);
 scheduleOverlay.addEventListener('click', closeScheduleModal);
 $('schedule-datetime').addEventListener('change', updateScheduleWarning);
 $('schedule-datetime').addEventListener('input', updateScheduleWarning);
+
+/* ── Canal Telegram (configuración, solo GESTOR) ────── */
+async function initTelegramPanel() {
+  const panel = $('tg-panel');
+  if (!panel) return;
+  // Solo el gestor ve la configuración del canal
+  if (localStorage.getItem('chatlink_role') !== 'manager') return;
+  panel.classList.remove('hidden');
+
+  const cfg = await apiFetch('/api/telegram/config');
+  if (cfg && cfg.configured) showTelegramStatus(cfg);
+}
+
+function showTelegramStatus(cfg) {
+  $('tg-status').textContent = cfg.bot_username ? ('conectado: @' + cfg.bot_username) : 'conectado';
+  if (cfg.link) {
+    const info = $('tg-info');
+    info.innerHTML = `✅ Tus clientes ya pueden escribirte en <a href="${cfg.link}" target="_blank">${cfg.link}</a> — comparte ese enlace (o su QR) para invitarles.`;
+    info.classList.remove('hidden');
+  }
+}
+
+$('tg-save-btn').addEventListener('click', async () => {
+  const token = $('tg-token').value.trim();
+  if (!token) { showToast('Pega el token que te dio @BotFather'); return; }
+
+  const btn = $('tg-save-btn');
+  btn.disabled = true;
+  btn.textContent = 'Conectando…';
+
+  try {
+    const res = await fetch('/api/telegram/config', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + localStorage.getItem('chatlink_token'),
+      },
+      body: JSON.stringify({ bot_token: token }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showTelegramStatus(data);
+      $('tg-token').value = '';
+      showToast('✈️ Bot de Telegram conectado ✓');
+    } else {
+      showToast(data.error || 'No se pudo conectar el bot', 4000);
+    }
+  } catch {
+    showToast('Error de conexión al configurar Telegram');
+  }
+  btn.disabled = false;
+  btn.textContent = 'Conectar bot';
+});
 
 /* ── Demo ───────────────────────────────────────────── */
 $('demo-send-btn').addEventListener('click', async () => {

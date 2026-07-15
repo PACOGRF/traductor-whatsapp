@@ -29,8 +29,20 @@ async function insertOutgoingMessage(conversationId, originalText, translatedTex
 // Envía el texto por el canal de la conversación.
 // Devuelve { ok, demo?, error? } — nunca lanza excepción.
 async function sendViaChannel(conv, translatedText, phoneNumberId = null) {
+  // ── Telegram: enviar con el bot de la empresa ──
   if (conv.channel === 'telegram') {
-    return { ok: false, error: 'Canal Telegram aún no disponible (llega en Sprint 1)' };
+    const { sendMessage } = require('./telegram');
+    const company = await db.get(
+      'SELECT telegram_bot_token FROM companies WHERE id = ?',
+      [conv.company_id || 1]
+    );
+    if (!company || !company.telegram_bot_token) {
+      return { ok: false, error: 'Telegram no está configurado para esta empresa' };
+    }
+    const r = await sendMessage(company.telegram_bot_token, conv.guest_phone, translatedText);
+    return r.ok
+      ? { ok: true }
+      : { ok: false, error: 'Telegram: ' + (r.description || 'error desconocido') };
   }
 
   const resolvedPhoneNumberId = phoneNumberId || conv.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID;
