@@ -30,10 +30,25 @@ function getMe(botToken) {
   return tgCall(botToken, 'getMe');
 }
 
-// Enviar texto a un chat
-function sendMessage(botToken, chatId, text) {
-  return tgCall(botToken, 'sendMessage', { chat_id: chatId, text });
+// Enviar texto a un chat (extra permite adjuntar teclados/botones de Telegram)
+function sendMessage(botToken, chatId, text, extra = {}) {
+  return tgCall(botToken, 'sendMessage', { chat_id: chatId, text, ...extra });
 }
+
+// Teclado con el botón "compartir mi contacto" (un toque y Telegram envía
+// el número verificado del cliente)
+function shareContactKeyboard(buttonLabel) {
+  return {
+    reply_markup: {
+      keyboard: [[{ text: buttonLabel, request_contact: true }]],
+      resize_keyboard: true,
+      one_time_keyboard: true,
+    },
+  };
+}
+
+// Quitar el teclado tras usarlo
+const removeKeyboard = { reply_markup: { remove_keyboard: true } };
 
 // Registrar el webhook del bot apuntando a nuestro servidor
 function setWebhook(botToken, url, secretToken) {
@@ -53,4 +68,4 @@ function webhookSecret(botToken) {
   return crypto.createHmac('sha256', key).update(botToken).digest('hex').slice(0, 48);
 }
 
-module.exports = { getMe, sendMessage, setWebhook, webhookSecret };
+module.exports = { getMe, sendMessage, setWebhook, webhookSecret, shareContactKeyboard, removeKeyboard };

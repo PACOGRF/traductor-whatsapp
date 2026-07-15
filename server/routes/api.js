@@ -17,10 +17,11 @@ async function sendPush(app, payload) {
 router.get('/conversations', async (req, res) => {
   try {
     const rows = await db.all(`
-      SELECT c.*,
+      SELECT c.*, ct.name AS contact_name, ct.phone AS contact_phone,
         (SELECT m.translated_text FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message,
         (SELECT m.created_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message_at
       FROM conversations c
+      LEFT JOIN contacts ct ON ct.id = c.contact_id
       ORDER BY last_message_at DESC
     `);
     res.json(rows);

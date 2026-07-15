@@ -69,6 +69,23 @@ socket.on('message_sent', ({ conversation, message }) => {
   }
 });
 
+// Un cliente compartió su contacto: se creó su ficha automáticamente
+socket.on('contact_saved', ({ conversation_id, name, phone }) => {
+  const conv = state.conversations.find(c => c.id === conversation_id);
+  if (conv) {
+    conv.contact_name = name;
+    conv.contact_phone = phone;
+    renderConvList();
+    // Refrescar la cabecera si es la conversación abierta
+    if (state.activeConvId === conversation_id) {
+      const langSuffix = conv.guest_language && conv.guest_language !== 'es'
+        ? ` · habla ${langName(conv.guest_language)}` : '';
+      chatGuestName.textContent = `✈️ ${name} · ${phone} · Telegram${langSuffix}`;
+    }
+  }
+  showToast(`🆕 Cliente guardado en fichas: ${name} (${phone})`, 5000);
+});
+
 // Un mensaje programado se envió: quitarlo de la lista de pendientes
 socket.on('scheduled_sent', ({ id, conversation_id }) => {
   if (state.activeConvId === conversation_id) {
@@ -143,7 +160,7 @@ function renderConvList() {
         <div class="conv-avatar">${initials}</div>
         <div class="conv-info">
           <div class="conv-name">
-            ${c.channel === 'telegram' ? '<span class="conv-channel" title="Telegram">✈️</span>' : ''}${esc(c.guest_name || c.guest_phone)}
+            ${c.channel === 'telegram' ? '<span class="conv-channel" title="Telegram">✈️</span>' : ''}${esc(c.contact_name || c.guest_name || c.guest_phone)}
             ${c.guest_language && c.guest_language !== 'es' ? `<span class="conv-lang">${langName(c.guest_language)}</span>` : ''}
           </div>
           <div class="conv-preview">${esc(preview)}</div>
@@ -365,10 +382,15 @@ async function selectConversation(id) {
   const conv = state.conversations.find(c => c.id === id);
   if (!conv) return;
 
-  // Cabecera: teléfono + idioma en la misma línea junto a ChatLink
+  // Cabecera: identificación + idioma en la misma línea junto a ChatLink.
+  // En Telegram el bot no conoce el teléfono (privacidad del canal): se muestra el nombre.
   const langSuffix = conv.guest_language && conv.guest_language !== 'es'
     ? ` · habla ${langName(conv.guest_language)}` : '';
-  chatGuestName.textContent = `${conv.guest_phone}${langSuffix}`;
+  // Si el cliente compartió su contacto, mostrar su nombre y teléfono reales (ficha)
+  const who = conv.channel === 'telegram'
+    ? `✈️ ${conv.contact_name || conv.guest_name || 'Cliente Telegram'}${conv.contact_phone ? ' · ' + conv.contact_phone : ''} · Telegram`
+    : conv.guest_phone;
+  chatGuestName.textContent = `${who}${langSuffix}`;
 
   // Mostrar chat, ocultar bienvenida
   welcomeScreen.style.display = 'none';
