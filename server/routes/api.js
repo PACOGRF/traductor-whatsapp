@@ -19,12 +19,24 @@ router.get('/conversations', async (req, res) => {
     const rows = await db.all(`
       SELECT c.*, ct.name AS contact_name, ct.phone AS contact_phone,
         (SELECT m.translated_text FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message,
-        (SELECT m.created_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message_at
+        (SELECT m.created_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message_at,
+        (SELECT m.direction FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_direction
       FROM conversations c
       LEFT JOIN contacts ct ON ct.id = c.contact_id
       ORDER BY last_message_at DESC
     `);
-    res.json(rows);
+    // Marca "sin responder": el último mensaje es del cliente y supera el umbral de la empresa
+    const company = await db.get('SELECT alert_hours FROM companies WHERE id = 1');
+    const alertHours = (company && company.alert_hours) || 4;
+    const now = Date.now();
+    res.json(rows.map(r => {
+      let unanswered_hours = null;
+      if (r.last_direction === 'incoming' && r.last_message_at) {
+        const h = (now - new Date(r.last_message_at).getTime()) / 3600000;
+        if (h >= alertHours) unanswered_hours = Math.floor(h);
+      }
+      return { ...r, unanswered_hours };
+    }));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -111,6 +123,10 @@ router.post('/demo/message', async (req, res) => {
       'INSERT INTO messages (conversation_id, direction, original_text, translated_text, language_detected) VALUES (?, ?, ?, ?, ?)',
       [conv.id, 'incoming', text, translated, detectedLang]
     );
+    await db.run(
+      'UPDATE conversations SET last_incoming_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [conv.id]
+    );
 
     const msg = await db.get('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1', [conv.id]);
 
@@ -130,40 +146,237 @@ router.post('/demo/message', async (req, res) => {
   }
 });
 
-// ── Tareas pendientes ──────────────────────────────────
-router.get('/tasks', async (req, res) => {
+// ── Usuarios de la empresa (para desplegables de responsable) ──
+router.get('/users', async (req, res) => {
   try {
-    const rows = await db.all('SELECT * FROM tasks ORDER BY id DESC');
+    const rows = await db.all(
+      `SELECT id, first_name, last_name, role FROM users
+       WHERE company_id = ? AND active = true
+       ORDER BY last_name, first_name`,
+      [req.user?.company_id || 1]
+    );
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Tareas 2.0 (Sprint 4) ──────────────────────────────
+// Aviso a otros paneles conectados de que las tareas cambiaron
+function emitTasksChanged(req) {
+  const io = req.app.get('io');
+  if (io) io.emit('tasks_changed');
+}
+
+// Todas las tareas vivas (borrado lógico fuera) con nombres para mostrar
+router.get('/tasks', async (req, res) => {
+  try {
+    const rows = await db.all(
+      `SELECT t.*,
+              c.guest_name  AS conv_guest_name,
+              c.channel     AS conv_channel,
+              ct.name       AS contact_name,
+              u.first_name  AS assigned_first_name,
+              u.last_name   AS assigned_last_name
+       FROM tasks t
+       LEFT JOIN conversations c ON c.id = t.conversation_id
+       LEFT JOIN contacts ct     ON ct.id = t.contact_id
+       LEFT JOIN users u         ON u.id = t.assigned_to
+       WHERE t.deleted_at IS NULL
+       ORDER BY t.id DESC`
+    );
+    res.json(rows.map(r => ({
+      ...r,
+      client_label: r.contact_name || r.conv_guest_name || r.guest_name || '—',
+      assigned_label: r.assigned_first_name ? `${r.assigned_first_name} ${r.assigned_last_name || ''}`.trim() : null,
+    })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Crear tarea (desde la chincheta 📌 o desde la pantalla TAREAS)
 router.post('/tasks', async (req, res) => {
   try {
-    const { msg_id, guest_name, message_text } = req.body;
-    const exists = await db.get('SELECT id FROM tasks WHERE msg_id = ?', [msg_id]);
-    if (exists) return res.status(409).json({ error: 'Ya existe' });
+    const { conversation_id, anchored_message_id, text, assigned_to,
+            notify_also, high_priority, remind_at, due_at } = req.body;
+    if (!text || !text.trim()) return res.status(400).json({ error: 'El comentario es obligatorio' });
+
+    let conv = null, guestLabel = null, contactId = null;
+    if (conversation_id) {
+      conv = await db.get('SELECT * FROM conversations WHERE id = ?', [conversation_id]);
+      if (conv) {
+        contactId = conv.contact_id || null;
+        const ficha = contactId ? await db.get('SELECT name FROM contacts WHERE id = ?', [contactId]) : null;
+        guestLabel = (ficha && ficha.name) || conv.guest_name || conv.guest_phone;
+      }
+    }
+
     await db.run(
-      'INSERT INTO tasks (msg_id, guest_name, message_text) VALUES (?, ?, ?)',
-      [msg_id, guest_name, message_text]
+      `INSERT INTO tasks (company_id, contact_id, conversation_id, anchored_message_id,
+                          msg_id, guest_name, message_text,
+                          assigned_to, notify_also, status, high_priority,
+                          remind_at, due_at, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
+      [req.user?.company_id || 1, contactId, conversation_id || null, anchored_message_id || null,
+       anchored_message_id || null, guestLabel, text.trim(),
+       assigned_to || null, notify_also && notify_also.length ? notify_also : null,
+       !!high_priority, remind_at || null, due_at || null, req.user?.user_id || null]
     );
     const row = await db.get('SELECT * FROM tasks ORDER BY id DESC LIMIT 1');
+
+    const { logAudit } = require('../services/audit');
+    await logAudit(req.user?.company_id, req.user?.user_id, 'task_created',
+      { task_id: row.id, conversation_id: conversation_id || null });
+
+    emitTasksChanged(req);
     res.json(row);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.patch('/tasks/:id/priority', async (req, res) => {
+// Cambiar estado (D4): solo el responsable o gestor/supervisor
+router.patch('/tasks/:id/status', async (req, res) => {
   try {
-    const task = await db.get('SELECT * FROM tasks WHERE id = ?', [req.params.id]);
-    if (!task) return res.status(404).json({ error: 'No encontrado' });
-    await db.run('UPDATE tasks SET priority = ? WHERE id = ?', [!task.priority, req.params.id]);
+    const { status } = req.body;
+    if (!['pending', 'in_progress', 'done'].includes(status)) {
+      return res.status(400).json({ error: 'Estado no válido' });
+    }
+    const task = await db.get('SELECT * FROM tasks WHERE id = ? AND deleted_at IS NULL', [req.params.id]);
+    if (!task) return res.status(404).json({ error: 'No encontrada' });
+
+    const isBoss = ['manager', 'supervisor'].includes(req.user?.role);
+    const isOwner = task.assigned_to && req.user?.user_id === task.assigned_to;
+    if (task.assigned_to && !isBoss && !isOwner) {
+      return res.status(403).json({ error: 'Solo el responsable o el gestor pueden cambiar el estado' });
+    }
+
+    await db.run(
+      'UPDATE tasks SET status = ?, status_changed_at = CURRENT_TIMESTAMP, status_changed_by = ? WHERE id = ?',
+      [status, req.user?.user_id || null, req.params.id]
+    );
+    const { logAudit } = require('../services/audit');
+    await logAudit(req.user?.company_id, req.user?.user_id, 'task_status_change',
+      { task_id: task.id, from: task.status, to: status });
+
+    emitTasksChanged(req);
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Editar tarea
+router.put('/tasks/:id', async (req, res) => {
+  try {
+    const task = await db.get('SELECT * FROM tasks WHERE id = ? AND deleted_at IS NULL', [req.params.id]);
+    if (!task) return res.status(404).json({ error: 'No encontrada' });
+
+    const { text, assigned_to, notify_also, high_priority, remind_at, due_at } = req.body;
+    // Si cambia la alerta, se reactiva el aviso del cron
+    const remindChanged = (remind_at || null) !== (task.remind_at ? new Date(task.remind_at).toISOString() : null);
+
+    await db.run(
+      `UPDATE tasks SET message_text = ?, assigned_to = ?, notify_also = ?,
+              high_priority = ?, remind_at = ?, due_at = ?
+              ${remindChanged ? ', remind_sent_at = NULL' : ''}
+       WHERE id = ?`,
+      [text !== undefined ? text : task.message_text,
+       assigned_to !== undefined ? assigned_to : task.assigned_to,
+       notify_also !== undefined ? (notify_also && notify_also.length ? notify_also : null) : task.notify_also,
+       high_priority !== undefined ? !!high_priority : task.high_priority,
+       remind_at !== undefined ? remind_at : task.remind_at,
+       due_at !== undefined ? due_at : task.due_at,
+       req.params.id]
+    );
+    emitTasksChanged(req);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Prioridad alta on/off (círculo rojo)
+router.patch('/tasks/:id/priority', async (req, res) => {
+  try {
+    const task = await db.get('SELECT * FROM tasks WHERE id = ? AND deleted_at IS NULL', [req.params.id]);
+    if (!task) return res.status(404).json({ error: 'No encontrada' });
+    await db.run('UPDATE tasks SET high_priority = ? WHERE id = ?', [!task.high_priority, req.params.id]);
+    emitTasksChanged(req);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Borrado LÓGICO (D4): la tarea se oculta pero queda en la base de datos
 router.delete('/tasks/:id', async (req, res) => {
   try {
-    await db.run('DELETE FROM tasks WHERE id = ?', [req.params.id]);
+    await db.run('UPDATE tasks SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?', [req.params.id]);
+    const { logAudit } = require('../services/audit');
+    await logAudit(req.user?.company_id, req.user?.user_id, 'task_deleted', { task_id: Number(req.params.id) });
+    emitTasksChanged(req);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Alertas vencidas globales (columna derecha, mitad inferior) ──
+router.get('/alerts', async (req, res) => {
+  try {
+    const now = Date.now();
+    const tasks = await db.all(
+      `SELECT t.*, c.guest_name AS conv_guest_name, ct.name AS contact_name
+       FROM tasks t
+       LEFT JOIN conversations c ON c.id = t.conversation_id
+       LEFT JOIN contacts ct ON ct.id = t.contact_id
+       WHERE t.deleted_at IS NULL AND t.status <> 'done'
+         AND (t.remind_at IS NOT NULL OR t.due_at IS NOT NULL)`
+    );
+    const alerts = [];
+    for (const t of tasks) {
+      const client = t.contact_name || t.conv_guest_name || t.guest_name || '—';
+      if (t.remind_at && new Date(t.remind_at).getTime() <= now) {
+        alerts.push({ type: 'remind', task_id: t.id, conversation_id: t.conversation_id,
+          client, text: t.message_text, when: t.remind_at, high_priority: t.high_priority });
+      }
+      if (t.due_at && new Date(t.due_at).getTime() <= now) {
+        alerts.push({ type: 'due', task_id: t.id, conversation_id: t.conversation_id,
+          client, text: t.message_text, when: t.due_at, high_priority: t.high_priority });
+      }
+    }
+    alerts.sort((a, b) => new Date(a.when) - new Date(b.when));
+    res.json(alerts);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Notas ancladas a mensajes (D8, post-its en el hilo) ──
+router.get('/conversations/:id/notes', async (req, res) => {
+  try {
+    const rows = await db.all(
+      `SELECT n.*, u.first_name, u.last_name
+       FROM message_notes n
+       JOIN messages m ON m.id = n.message_id
+       LEFT JOIN users u ON u.id = n.user_id
+       WHERE m.conversation_id = ?
+       ORDER BY n.created_at ASC`,
+      [req.params.id]
+    );
+    res.json(rows.map(r => ({
+      ...r,
+      author: r.first_name ? `${r.first_name} ${r.last_name || ''}`.trim() : 'Equipo',
+    })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/messages/:id/notes', async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text || !text.trim()) return res.status(400).json({ error: 'La nota no puede estar vacía' });
+    await db.run(
+      'INSERT INTO message_notes (message_id, user_id, text) VALUES (?, ?, ?)',
+      [req.params.id, req.user?.user_id || null, text.trim()]
+    );
+    const row = await db.get('SELECT * FROM message_notes ORDER BY id DESC LIMIT 1');
+    const io = req.app.get('io');
+    if (io) io.emit('note_added', { message_id: Number(req.params.id) });
+    res.json(row);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/notes/:id', async (req, res) => {
+  try {
+    await db.run('DELETE FROM message_notes WHERE id = ?', [req.params.id]);
+    const { logAudit } = require('../services/audit');
+    await logAudit(req.user?.company_id, req.user?.user_id, 'note_deleted', { note_id: Number(req.params.id) });
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

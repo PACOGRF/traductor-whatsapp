@@ -20,6 +20,11 @@ async function insertOutgoingMessage(conversationId, originalText, translatedTex
     'INSERT INTO messages (conversation_id, direction, original_text, translated_text, language_detected, sender_user_id) VALUES (?, ?, ?, ?, ?, ?)',
     [conversationId, 'outgoing', originalText, translatedText, 'es', senderUserId]
   );
+  // Marca de respuesta: apaga la alerta de "conversación sin responder"
+  await db.run(
+    'UPDATE conversations SET last_outgoing_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [conversationId]
+  );
   return db.get(
     'SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1',
     [conversationId]

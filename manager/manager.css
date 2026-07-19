@@ -939,3 +939,159 @@ body {
   /* Botón notificaciones */
   #notif-btn { top: 10px; right: 0.75rem; font-size: 0.72rem; padding: 3px 10px; }
 }
+
+/* ═══════════ TAREAS 2.0 (Sprint 4) ═══════════ */
+
+/* Columna derecha dividida (D9): tareas de la conversación + alertas */
+#tasks-list { flex: 1 1 55%; min-height: 0; overflow-y: auto; }
+#alerts-header {
+  background: #b3362f; color: white;
+  padding: 6px 1rem; font-size: 0.74rem; font-weight: 700;
+  letter-spacing: 0.06em; flex-shrink: 0;
+}
+#alerts-list { flex: 1 1 45%; min-height: 0; overflow-y: auto; background: rgba(179,54,47,0.08); }
+
+#open-tasks-screen {
+  background: rgba(255,255,255,0.18); border: none; color: white;
+  border-radius: 6px; padding: 3px 9px; font-size: 0.72rem; cursor: pointer; font-weight: 600;
+}
+#open-tasks-screen:hover { background: rgba(255,255,255,0.32); }
+
+/* Tarjetas de tarea (columna derecha) */
+.task-card {
+  background: white; border-radius: 8px; margin: 8px;
+  padding: 8px 10px; font-size: 0.8rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+.task-card.overdue-card { border-left: 3px solid #e53935; }
+.task-card .tc-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.task-card .tc-text { margin: 4px 0; color: #333; }
+.task-card .tc-meta { font-size: 0.7rem; color: #777; display: flex; gap: 8px; flex-wrap: wrap; }
+.task-card .tc-meta .overdue { color: #e53935; font-weight: 700; }
+.task-card .tc-actions { display: flex; gap: 6px; margin-top: 4px; justify-content: flex-end; }
+.task-card .tc-actions button { background: none; border: none; cursor: pointer; font-size: 0.85rem; padding: 2px; }
+
+/* Píldoras de estado (colores fijos de la app) */
+.status-pill {
+  border: none; border-radius: 10px; padding: 2px 9px;
+  font-size: 0.68rem; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.status-pending     { background: #ffc107; color: #5c4500; }
+.status-in_progress { background: #2196f3; color: white; }
+.status-done        { background: #43a047; color: white; }
+.prio-dot { color: #e53935; font-size: 0.8rem; }
+
+/* Alertas vencidas */
+.alert-item {
+  background: white; border-left: 3px solid #e53935; border-radius: 8px;
+  margin: 8px; padding: 7px 10px; font-size: 0.76rem; cursor: pointer;
+}
+.alert-item:hover { background: #fff5f4; }
+.alert-item .al-client { font-weight: 700; color: #333; }
+.alert-item .al-late { color: #e53935; font-weight: 700; font-size: 0.7rem; }
+.alert-item .al-text { color: #555; margin-top: 2px; }
+
+/* Notas ancladas en el hilo (D8, post-it) */
+.msg-note {
+  background: #fff8c4; border-left: 3px solid #e0c341; border-radius: 6px;
+  padding: 6px 10px; margin: 0 0 6px 24px; font-size: 0.78rem;
+  color: #5a4d00; max-width: 65%; align-self: flex-start;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+.msg-note .note-author { font-weight: 700; font-size: 0.68rem; display: block; opacity: 0.8; }
+.msg-note .note-del { float: right; background: none; border: none; cursor: pointer; font-size: 0.7rem; opacity: 0.5; }
+.msg-note .note-del:hover { opacity: 1; }
+
+/* Modal de la chincheta */
+#task-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 400; }
+#task-overlay.hidden { display: none; }
+#task-modal {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(440px, calc(100vw - 2rem)); max-height: 90vh; overflow-y: auto;
+  background: white; border-radius: 12px; z-index: 401;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+}
+#task-modal.hidden { display: none; }
+#task-header {
+  background: var(--green-dark); color: white; padding: 0 1rem;
+  height: var(--header-h); display: flex; align-items: center; justify-content: space-between;
+  font-weight: 600; position: sticky; top: 0;
+}
+#task-close { background: none; border: none; color: white; font-size: 1.1rem; cursor: pointer; }
+#task-body { padding: 1rem; display: flex; flex-direction: column; gap: 0.45rem; }
+#task-body label { font-size: 0.8rem; font-weight: 600; color: #444; }
+#task-body input[type="text"], #task-body textarea, #task-body select, #task-body input[type="datetime-local"] {
+  width: 100%; border: 1.5px solid #ddd; border-radius: 8px;
+  padding: 8px 10px; font-size: 0.9rem; font-family: inherit; outline: none;
+}
+#task-body textarea:focus, #task-body select:focus, #task-body input:focus { border-color: var(--green-mid); }
+.task-check-row { display: flex; gap: 8px; align-items: flex-start; font-size: 0.85rem; color: #333; cursor: pointer; }
+.task-check-row input { margin-top: 3px; width: auto; }
+.task-check-row small { color: #888; }
+#task-anchored-preview {
+  background: #f2faf7; border-left: 3px solid var(--green-mid);
+  padding: 6px 10px; font-size: 0.78rem; color: #555; border-radius: 6px;
+}
+#task-anchored-preview.hidden { display: none; }
+#task-remind-custom.hidden, #task-client-row.hidden { display: none; }
+.task-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.6rem; }
+.task-actions .btn-secondary {
+  background: none; border: 1px solid #ccc; border-radius: 8px;
+  padding: 8px 14px; font-size: 0.85rem; cursor: pointer; color: #555;
+}
+.task-actions .btn-primary {
+  background: var(--green-dark); color: white; border: none; border-radius: 8px;
+  padding: 8px 16px; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+}
+.task-actions .btn-primary:hover { background: var(--green-mid); }
+
+/* Pantalla TAREAS (tabla completa) */
+#tasks-screen { position: fixed; inset: 0; background: #f2f2f2; z-index: 380; display: flex; flex-direction: column; }
+#tasks-screen.hidden { display: none; }
+#tasks-screen-header {
+  background: var(--green-dark); color: white; min-height: var(--header-h);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 1rem; font-weight: 700; flex-shrink: 0;
+}
+#tasks-add-btn {
+  background: var(--green-light); color: white; border: none; border-radius: 8px;
+  padding: 6px 12px; font-size: 0.82rem; font-weight: 700; cursor: pointer; margin-right: 8px;
+}
+#tasks-add-btn:hover { background: var(--green-mid); }
+#tasks-screen-close { background: none; border: none; color: white; font-size: 1.15rem; cursor: pointer; }
+#tasks-filters {
+  display: flex; gap: 0.5rem; padding: 0.6rem 1rem; background: white;
+  border-bottom: 1px solid #ddd; flex-wrap: wrap; flex-shrink: 0;
+}
+#tasks-filters input, #tasks-filters select {
+  border: 1px solid #ddd; border-radius: 8px; padding: 6px 10px; font-size: 0.85rem; outline: none;
+}
+#tasks-filters input { flex: 1; min-width: 180px; }
+#tasks-table-wrap { flex: 1; overflow: auto; padding: 0.75rem 1rem; }
+#tasks-table { width: 100%; border-collapse: collapse; background: white; font-size: 0.84rem; border-radius: 8px; overflow: hidden; }
+#tasks-table th {
+  background: var(--green-dark); color: white; text-align: left;
+  padding: 8px 10px; font-size: 0.74rem; letter-spacing: 0.04em; position: sticky; top: 0;
+}
+#tasks-table td { padding: 8px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+#tasks-table tr:hover td { background: #f7fbf9; }
+#tasks-table .overdue { color: #e53935; font-weight: 700; }
+#tasks-table .task-link { cursor: pointer; color: var(--green-mid); text-decoration: underline; }
+#tasks-table .row-actions button { background: none; border: none; cursor: pointer; font-size: 0.9rem; padding: 2px 4px; }
+#tasks-cards { display: none; }
+
+/* Móvil (D11): tabla → tarjetas apiladas */
+@media (max-width: 768px) {
+  #tasks-table { display: none; }
+  #tasks-cards { display: block; }
+  #tasks-cards .task-card { margin: 0 0 10px 0; }
+}
+
+/* Ajustes de color sobre fondos blancos + badge sin responder */
+.task-card { color: #333; }
+#tasks-screen { color: #333; }
+.conv-unanswered {
+  font-size: 0.64rem; background: #e53935; color: white;
+  border-radius: 10px; padding: 1px 6px; font-weight: 700;
+  margin-left: 4px; vertical-align: middle; white-space: nowrap;
+}

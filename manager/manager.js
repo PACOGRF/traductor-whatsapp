@@ -10,6 +10,9 @@ const state = {
   quickReplies: [],
   tasks: [],
   scheduled: [],          // mensajes programados de la conversación activa
+  users: [],              // empleados de la empresa (desplegables de responsable)
+  alerts: [],             // alertas vencidas globales (columna derecha, abajo)
+  notes: [],              // notas ancladas de la conversación activa (D8)
 };
 let editingScheduledId = null; // id del programado que se está editando en el modal
 
@@ -94,6 +97,14 @@ socket.on('contact_pending', ({ conversation_id, name, phone }) => {
   openContactModal(conversation_id, { name, phone });
 });
 
+// Las tareas o alertas cambiaron en el servidor (otro panel, el cron…)
+socket.on('tasks_changed', async () => { await loadTasks(); await loadAlerts(); });
+
+// Nota anclada nueva en la conversación abierta
+socket.on('note_added', ({ message_id }) => {
+  if (state.messages.find(m => m.id === message_id)) loadNotes(state.activeConvId);
+});
+
 // Un mensaje programado se envió: quitarlo de la lista de pendientes
 socket.on('scheduled_sent', ({ id, conversation_id }) => {
   if (state.activeConvId === conversation_id) {
@@ -122,7 +133,9 @@ async function init() {
 
   await loadConversations();
   await loadQuickReplies();
+  await loadUsers();
   await loadTasks();
+  await loadAlerts();
   await initTelegramPanel();
 
   // En escritorio el chat siempre visible; en móvil empieza oculto
@@ -169,6 +182,7 @@ function renderConvList() {
         <div class="conv-info">
           <div class="conv-name">
             ${c.channel === 'telegram' ? '<span class="conv-channel" title="Telegram">✈️</span>' : ''}${esc(c.contact_name || c.guest_name || c.guest_phone)}
+            ${c.unanswered_hours ? `<span class="conv-unanswered" title="Sin responder">⚠️ ${c.unanswered_hours}h</span>` : ''}
             ${c.guest_language && c.guest_language !== 'es' ? `<span class="conv-lang">${langName(c.guest_language)}</span>` : ''}
           </div>
           <div class="conv-preview">${esc(preview)}</div>
@@ -224,23 +238,30 @@ function renderMessages() {
         </div>` : '';
     }
 
+    // Notas ancladas a este mensaje (D8): post-its en el hilo
+    const notesHtml = (state.notes || []).filter(n => n.message_id === m.id).map(n => `
+      <div class="msg-note">
+        <button class="note-del" data-id="${n.id}" title="Eliminar nota">✕</button>
+        <span class="note-author">📝 ${esc(n.author || 'Equipo')}</span>${esc(n.text)}
+      </div>`).join('');
+
     return `${dateDivider}
       <div class="msg-bubble ${cls}" data-msg-id="${m.id}">
-        <button class="msg-pin-btn" data-msg-id="${m.id}" title="Añadir a tareas pendientes">📌</button>
+        <button class="msg-pin-btn" data-msg-id="${m.id}" title="Crear tarea o nota de este mensaje">📌</button>
         <div class="msg-original">${mainText}</div>
         ${subText}
         <span class="msg-time">${time}</span>
-      </div>`;
+      </div>${notesHtml}`;
   }).join('') + renderScheduledHtml();
 
-  // Eventos para los botones de pin
+  // La chincheta 📌 abre la ventana de tarea/nota
   messagesArea.querySelectorAll('.msg-pin-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const msgId = Number(btn.dataset.msgId);
-      const msg  = state.messages.find(m => m.id === msgId);
-      const conv = state.conversations.find(c => c.id === state.activeConvId);
-      if (msg && conv) addTask(msg, conv);
-    });
+    btn.addEventListener('click', () => openTaskModal({ messageId: Number(btn.dataset.msgId) }));
+  });
+
+  // Borrar notas ancladas
+  messagesArea.querySelectorAll('.note-del').forEach(btn => {
+    btn.addEventListener('click', () => deleteNote(Number(btn.dataset.id)));
   });
 
   // Eventos de los mensajes programados (editar / cancelar)
@@ -301,87 +322,319 @@ function renderQuickReplies() {
   });
 }
 
-/* ── Tareas pendientes ──────────────────────────────── */
+/* ── Tareas 2.0 (Sprint 4) ──────────────────────────── */
+const STATUS_LABELS = { pending: 'PENDIENTE', in_progress: 'EN CURSO', done: 'REALIZADA' };
+const NEXT_STATUS   = { pending: 'in_progress', in_progress: 'done', done: 'pending' };
+
+async function loadUsers() {
+  const rows = await apiFetch('/api/users');
+  if (Array.isArray(rows)) state.users = rows;
+}
+
 async function loadTasks() {
-  try {
-    const rows = await apiFetch('/api/tasks');
-    if (Array.isArray(rows)) { state.tasks = rows; renderTasks(); }
-  } catch (e) { console.error('Error cargando tareas', e); }
+  const rows = await apiFetch('/api/tasks');
+  if (Array.isArray(rows)) { state.tasks = rows; renderConvTasks(); renderTasksScreen(); }
 }
 
-async function addTask(msg, conv) {
-  if (state.tasks.find(t => t.msg_id === msg.id)) {
-    showToast('Este mensaje ya está en tareas pendientes');
-    return;
-  }
-  try {
-    const res = await fetch('/api/tasks', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + localStorage.getItem('chatlink_token'),
-      },
-      body: JSON.stringify({
-        msg_id: msg.id,
-        guest_name: conv.guest_name || conv.guest_phone,
-        message_text: msg.original_text || msg.translated_text || '',
-      }),
-    });
-    if (res.status === 409) { showToast('Este mensaje ya está en tareas pendientes'); return; }
-    const task = await res.json();
-    state.tasks.unshift(task);
-    renderTasks();
-    showToast('Añadido a tareas pendientes 📌');
-  } catch (e) { showToast('Error al guardar tarea'); }
+async function loadAlerts() {
+  const rows = await apiFetch('/api/alerts');
+  if (Array.isArray(rows)) { state.alerts = rows; renderAlerts(); }
 }
 
-async function removeTask(id) {
-  try {
-    await apiFetch(`/api/tasks/${id}`, { method: 'DELETE' });
-    state.tasks = state.tasks.filter(t => t.id !== id);
-    renderTasks();
-  } catch (e) { showToast('Error al eliminar tarea'); }
+async function loadNotes(convId) {
+  const rows = await apiFetch(`/api/conversations/${convId}/notes`);
+  if (Array.isArray(rows)) { state.notes = rows; renderMessages(); }
 }
 
-async function togglePriority(id) {
-  try {
-    await apiFetch(`/api/tasks/${id}/priority`, { method: 'PATCH' });
-    const task = state.tasks.find(t => t.id === id);
-    if (task) { task.priority = !task.priority; renderTasks(); }
-  } catch (e) { showToast('Error al cambiar prioridad'); }
+function isOverdue(t) {
+  if (t.status === 'done') return false;
+  const now = Date.now();
+  return (t.due_at && new Date(t.due_at).getTime() < now) ||
+         (t.remind_at && new Date(t.remind_at).getTime() < now);
 }
 
-function renderTasks() {
+function fmtDT(v) {
+  if (!v) return '';
+  return new Date(v).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+async function changeStatus(id, current) {
+  const next = NEXT_STATUS[current] || 'pending';
+  const r = await apiFetch(`/api/tasks/${id}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: next }),
+  });
+  if (r) { await loadTasks(); await loadAlerts(); showToast('Estado: ' + STATUS_LABELS[next]); }
+  else showToast('No se pudo cambiar el estado (¿eres el responsable?)');
+}
+
+async function deleteTask(id) {
+  if (!confirm('¿Eliminar esta tarea? (quedará en el histórico)')) return;
+  const r = await apiFetch(`/api/tasks/${id}`, { method: 'DELETE' });
+  if (r) { await loadTasks(); await loadAlerts(); showToast('Tarea eliminada 🗑️'); }
+}
+
+function taskCardHtml(t, showClient) {
+  const overdue = isOverdue(t);
+  return `
+    <div class="task-card ${overdue ? 'overdue-card' : ''}">
+      <div class="tc-top">
+        <span>${t.high_priority ? '<span class="prio-dot">🔴</span> ' : ''}<strong>${showClient ? esc(t.client_label || '') : ''}</strong></span>
+        <button class="status-pill status-${t.status}" data-id="${t.id}" data-status="${t.status}" title="Cambiar estado">${STATUS_LABELS[t.status] || t.status}</button>
+      </div>
+      <div class="tc-text">${esc(truncate(t.message_text || '', 110))}</div>
+      <div class="tc-meta">
+        ${t.assigned_label ? `<span>👤 ${esc(t.assigned_label)}</span>` : ''}
+        ${t.remind_at ? `<span class="${t.status !== 'done' && new Date(t.remind_at) < new Date() ? 'overdue' : ''}">⏰ ${fmtDT(t.remind_at)}</span>` : ''}
+        ${t.due_at ? `<span class="${t.status !== 'done' && new Date(t.due_at) < new Date() ? 'overdue' : ''}">📅 ${fmtDT(t.due_at)}</span>` : ''}
+      </div>
+      <div class="tc-actions">
+        ${t.anchored_message_id ? `<button class="task-goto-btn" data-conv="${t.conversation_id}" data-msg="${t.anchored_message_id}" title="Ir al mensaje">💬</button>` : ''}
+        <button class="task-edit-btn" data-id="${t.id}" title="Editar">✏️</button>
+        <button class="task-del-btn" data-id="${t.id}" title="Eliminar">🗑️</button>
+      </div>
+    </div>`;
+}
+
+function wireTaskCardEvents(rootEl) {
+  rootEl.querySelectorAll('.status-pill').forEach(b =>
+    b.addEventListener('click', () => changeStatus(Number(b.dataset.id), b.dataset.status)));
+  rootEl.querySelectorAll('.task-del-btn').forEach(b =>
+    b.addEventListener('click', () => deleteTask(Number(b.dataset.id))));
+  rootEl.querySelectorAll('.task-edit-btn').forEach(b =>
+    b.addEventListener('click', () => openTaskModal({ taskId: Number(b.dataset.id) })));
+  rootEl.querySelectorAll('.task-goto-btn').forEach(b =>
+    b.addEventListener('click', () => gotoMessage(Number(b.dataset.conv), Number(b.dataset.msg))));
+}
+
+// Mitad superior derecha: tareas (no realizadas) de la conversación abierta
+function renderConvTasks() {
   if (!tasksList) return;
-  if (state.tasks.length === 0) {
-    tasksList.innerHTML = '<div class="tasks-empty">Sin tareas pendientes.<br>Usa 📌 en los mensajes para añadir.</div>';
+  const tasks = state.tasks.filter(t => t.conversation_id === state.activeConvId && t.status !== 'done');
+  if (!state.activeConvId || tasks.length === 0) {
+    tasksList.innerHTML = '<div class="tasks-empty">Sin tareas en esta conversación.<br>Usa 📌 en los mensajes para añadir.</div>';
     return;
   }
+  tasksList.innerHTML = tasks.map(t => taskCardHtml(t, false)).join('');
+  wireTaskCardEvents(tasksList);
+}
 
-  tasksList.innerHTML = state.tasks.map(t => {
-    const date = formatTime(t.created_at);
-    const text = t.message_text && t.message_text.length > 80 ? t.message_text.slice(0, 80) + '…' : (t.message_text || '');
-    const pClass = t.priority ? 'priority-on' : '';
+// Mitad inferior derecha: alertas vencidas globales (siempre visibles, D9)
+function renderAlerts() {
+  const el = $('alerts-list');
+  if (!el) return;
+  if (!state.alerts.length) {
+    el.innerHTML = '<div class="tasks-empty">Sin alertas vencidas 🎉</div>';
+    return;
+  }
+  el.innerHTML = state.alerts.map(a => {
+    const mins = Math.floor((Date.now() - new Date(a.when).getTime()) / 60000);
+    const late = mins >= 1440 ? Math.floor(mins / 1440) + ' d' : mins >= 60 ? Math.floor(mins / 60) + ' h' : mins + ' min';
     return `
-      <div class="task-item ${pClass}">
-        <div class="task-info">
-          <div class="task-name">${esc(t.guest_name)}</div>
-          <div class="task-date">${date}</div>
-          <div class="task-text">${esc(text)}</div>
-        </div>
-        <div class="task-estado">
-          <button class="task-priority-btn ${pClass}" data-id="${t.id}" title="Marcar prioridad"></button>
-          <button class="task-del-btn" data-id="${t.id}" title="Eliminar tarea">🗑</button>
-        </div>
+      <div class="alert-item" data-conv="${a.conversation_id || ''}">
+        <span class="al-client">${a.high_priority ? '🔴 ' : ''}${esc(a.client)}</span>
+        <span class="al-late">· ${a.type === 'due' ? '📅 límite' : '⏰ aviso'} hace ${late}</span>
+        <div class="al-text">${esc(truncate(a.text || '', 70))}</div>
       </div>`;
   }).join('');
+  el.querySelectorAll('.alert-item').forEach(item =>
+    item.addEventListener('click', () => {
+      const convId = Number(item.dataset.conv);
+      if (convId) { closeTasksScreen(); selectConversation(convId); }
+    }));
+}
 
-  tasksList.querySelectorAll('.task-priority-btn').forEach(btn =>
-    btn.addEventListener('click', () => togglePriority(Number(btn.dataset.id)))
-  );
-  tasksList.querySelectorAll('.task-del-btn').forEach(btn =>
-    btn.addEventListener('click', () => removeTask(Number(btn.dataset.id)))
-  );
+// Saltar al mensaje anclado (scroll + resaltado temporal)
+async function gotoMessage(convId, msgId) {
+  closeTasksScreen();
+  if (convId && convId !== state.activeConvId) await selectConversation(convId);
+  const el = messagesArea.querySelector(`[data-msg-id="${msgId}"]`);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.style.outline = '3px solid #ffc107';
+    setTimeout(() => { el.style.outline = ''; }, 2500);
+  }
+}
+
+/* ── Modal chincheta 📌 (crear/editar tarea o nota) ──── */
+let taskModalCtx = {};   // { messageId?, taskId?, fromScreen? }
+
+function fillUserSelect(sel, selectedId) {
+  sel.innerHTML = '<option value="">— Sin responsable —</option>' + state.users.map(u =>
+    `<option value="${u.id}" ${selectedId === u.id ? 'selected' : ''}>${esc((u.last_name ? u.last_name + ', ' : '') + u.first_name)}</option>`).join('');
+}
+
+function openTaskModal(ctx = {}) {
+  taskModalCtx = ctx;
+  const isEdit = !!ctx.taskId;
+  const task = isEdit ? state.tasks.find(t => t.id === ctx.taskId) : null;
+  const anchoredMsg = ctx.messageId ? state.messages.find(m => m.id === ctx.messageId) : null;
+
+  $('task-title').textContent = isEdit ? '✏️ Editar tarea' : '📌 Nueva tarea';
+  $('task-save').textContent  = isEdit ? 'Guardar cambios' : 'Guardar tarea';
+
+  const prev = $('task-anchored-preview');
+  if (anchoredMsg) {
+    prev.textContent = '💬 ' + truncate(anchoredMsg.translated_text || anchoredMsg.original_text || '', 120);
+    prev.classList.remove('hidden');
+  } else prev.classList.add('hidden');
+
+  // El checkbox tarea/nota solo tiene sentido al anclar desde un mensaje
+  $('task-astask-row').style.display = (!isEdit && ctx.messageId) ? '' : 'none';
+  $('task-astask').checked = true;
+
+  // Selector de cliente: solo al crear desde la pantalla TAREAS
+  const clientRow = $('task-client-row');
+  if (ctx.fromScreen && !isEdit) {
+    clientRow.classList.remove('hidden');
+    const convs = [...state.conversations].sort((a, b) =>
+      (a.contact_name || a.guest_name || a.guest_phone || '').localeCompare(b.contact_name || b.guest_name || b.guest_phone || ''));
+    $('task-client').innerHTML = convs.map(c =>
+      `<option value="${c.id}">${esc(c.contact_name || c.guest_name || c.guest_phone)}</option>`).join('');
+  } else clientRow.classList.add('hidden');
+
+  $('task-text').value = task ? (task.message_text || '') : '';
+  fillUserSelect($('task-assigned'), task ? task.assigned_to : null);
+
+  $('task-remind').value = task && task.remind_at ? 'custom' : '';
+  const rc = $('task-remind-custom');
+  if (task && task.remind_at) { rc.classList.remove('hidden'); rc.value = toLocalInputValue(new Date(task.remind_at)); }
+  else { rc.classList.add('hidden'); rc.value = ''; }
+  $('task-due').value = task && task.due_at ? toLocalInputValue(new Date(task.due_at)) : '';
+  $('task-priority').checked = task ? !!task.high_priority : false;
+
+  $('task-modal').classList.remove('hidden');
+  $('task-overlay').classList.remove('hidden');
+  $('task-text').focus();
+}
+
+function closeTaskModal() {
+  $('task-modal').classList.add('hidden');
+  $('task-overlay').classList.add('hidden');
+  taskModalCtx = {};
+}
+
+function computeRemindAt() {
+  const v = $('task-remind').value;
+  if (!v) return null;
+  if (v === 'custom') {
+    const raw = $('task-remind-custom').value;
+    return raw ? new Date(raw).toISOString() : null;
+  }
+  const hours = { '1h': 1, '3h': 3, '24h': 24, '48h': 48 }[v];
+  return hours ? new Date(Date.now() + hours * 3600000).toISOString() : null;
+}
+
+async function saveTaskModal() {
+  const text = $('task-text').value.trim();
+  if (!text) { showToast('Escribe el comentario de la tarea'); return; }
+  const isEdit = !!taskModalCtx.taskId;
+
+  // Checkbox desmarcado → solo NOTA anclada al mensaje (D8)
+  if (!isEdit && taskModalCtx.messageId && !$('task-astask').checked) {
+    const r = await apiFetch(`/api/messages/${taskModalCtx.messageId}/notes`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    if (r) { closeTaskModal(); await loadNotes(state.activeConvId); showToast('Nota anclada al mensaje 📝'); }
+    else showToast('No se pudo guardar la nota');
+    return;
+  }
+
+  const body = {
+    text,
+    assigned_to: Number($('task-assigned').value) || null,
+    high_priority: $('task-priority').checked,
+    remind_at: computeRemindAt(),
+    due_at: $('task-due').value ? new Date($('task-due').value).toISOString() : null,
+  };
+
+  let r;
+  if (isEdit) {
+    r = await apiFetch(`/api/tasks/${taskModalCtx.taskId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+  } else {
+    body.conversation_id = taskModalCtx.fromScreen ? (Number($('task-client').value) || null) : state.activeConvId;
+    body.anchored_message_id = taskModalCtx.messageId || null;
+    r = await apiFetch('/api/tasks', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+  }
+  if (r) {
+    closeTaskModal();
+    await loadTasks(); await loadAlerts();
+    showToast(isEdit ? 'Tarea actualizada ✓' : 'Tarea guardada 📌');
+  } else showToast('No se pudo guardar la tarea');
+}
+
+async function deleteNote(id) {
+  const r = await apiFetch(`/api/notes/${id}`, { method: 'DELETE' });
+  if (r) { await loadNotes(state.activeConvId); showToast('Nota eliminada'); }
+}
+
+$('task-save').addEventListener('click', saveTaskModal);
+$('task-cancel').addEventListener('click', closeTaskModal);
+$('task-close').addEventListener('click', closeTaskModal);
+$('task-overlay').addEventListener('click', closeTaskModal);
+$('task-remind').addEventListener('change', () =>
+  $('task-remind-custom').classList.toggle('hidden', $('task-remind').value !== 'custom'));
+
+/* ── Pantalla TAREAS (tabla completa) ────────────────── */
+function openTasksScreen() { $('tasks-screen').classList.remove('hidden'); renderTasksScreen(); }
+function closeTasksScreen() { $('tasks-screen').classList.add('hidden'); }
+$('open-tasks-screen').addEventListener('click', openTasksScreen);
+$('tasks-screen-close').addEventListener('click', closeTasksScreen);
+$('tasks-add-btn').addEventListener('click', () => openTaskModal({ fromScreen: true }));
+$('tasks-search').addEventListener('input', renderTasksScreen);
+$('tasks-filter-status').addEventListener('change', renderTasksScreen);
+$('tasks-filter-assigned').addEventListener('change', renderTasksScreen);
+
+function renderTasksScreen() {
+  const tbody = $('tasks-table-body');
+  if (!tbody || $('tasks-screen').classList.contains('hidden')) return;
+
+  const fa = $('tasks-filter-assigned');
+  const currentFa = fa.value;
+  fa.innerHTML = '<option value="">Todos los responsables</option>' + state.users.map(u =>
+    `<option value="${u.id}">${esc(u.first_name + ' ' + (u.last_name || ''))}</option>`).join('');
+  fa.value = currentFa;
+
+  const q  = ($('tasks-search').value || '').toLowerCase();
+  const fs = $('tasks-filter-status').value;
+  const rows = state.tasks.filter(t => {
+    if (fs && t.status !== fs) return false;
+    if (fa.value && t.assigned_to !== Number(fa.value)) return false;
+    if (q && !((t.client_label || '').toLowerCase().includes(q) || (t.message_text || '').toLowerCase().includes(q))) return false;
+    return true;
+  });
+
+  tbody.innerHTML = rows.length ? rows.map(t => {
+    const overdueDue = t.due_at && new Date(t.due_at) < new Date() && t.status !== 'done';
+    const resumen = esc(truncate(t.message_text || '', 80));
+    return `<tr>
+      <td>${t.high_priority ? '🔴 ' : ''}${esc(t.client_label || '—')}</td>
+      <td>${t.anchored_message_id ? `<span class="task-link" data-conv="${t.conversation_id}" data-msg="${t.anchored_message_id}" title="Ir al mensaje">${resumen}</span>` : resumen}</td>
+      <td>${esc(t.assigned_label || '—')}</td>
+      <td><button class="status-pill status-${t.status}" data-id="${t.id}" data-status="${t.status}">${STATUS_LABELS[t.status]}</button></td>
+      <td>${t.remind_at ? fmtDT(t.remind_at) : '—'}</td>
+      <td class="${overdueDue ? 'overdue' : ''}">${t.due_at ? fmtDT(t.due_at) : '—'}</td>
+      <td class="row-actions">
+        <button class="task-edit-btn" data-id="${t.id}" title="Editar">✏️</button>
+        <button class="task-del-btn" data-id="${t.id}" title="Eliminar">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="7" style="text-align:center;color:#999;padding:1.5rem;">No hay tareas que coincidan</td></tr>';
+
+  wireTaskCardEvents(tbody);
+  tbody.querySelectorAll('.task-link').forEach(el =>
+    el.addEventListener('click', () => gotoMessage(Number(el.dataset.conv), Number(el.dataset.msg))));
+
+  // Móvil (D11): tarjetas apiladas en lugar de tabla
+  const cards = $('tasks-cards');
+  cards.innerHTML = rows.map(t => taskCardHtml(t, true)).join('');
+  wireTaskCardEvents(cards);
 }
 
 /* ── Seleccionar conversación ───────────────────────── */
@@ -412,8 +665,11 @@ async function selectConversation(id) {
 
   renderConvList();
   state.scheduled = [];
+  state.notes = [];
   await loadMessages(id);
   await loadScheduled(id);
+  await loadNotes(id);
+  renderConvTasks();
 
   // Propuesta de ficha pendiente (llegó estando desconectado): preguntar ahora
   if (conv.pending_contact && !conv.contact_id) {

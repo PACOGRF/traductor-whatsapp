@@ -81,10 +81,66 @@ async function markFailed(sm, reason, io, app, conv) {
   });
 }
 
+// ── Motor de alertas (Sprint 4) ────────────────────────────────
+// 1) Tareas cuya alerta (remind_at) ha llegado → push una sola vez
+// 2) Conversaciones sin responder más de alert_hours → push una sola vez
+async function processAlerts(io, app) {
+  const now = Date.now();
+  try {
+    // 1. Tareas con aviso vencido y aún no notificado
+    const dueTasks = await db.all(
+      `SELECT t.*, c.guest_name AS conv_guest_name, ct.name AS contact_name
+       FROM tasks t
+       LEFT JOIN conversations c ON c.id = t.conversation_id
+       LEFT JOIN contacts ct ON ct.id = t.contact_id
+       WHERE t.deleted_at IS NULL AND t.status <> 'done'
+         AND t.remind_at IS NOT NULL AND t.remind_sent_at IS NULL`
+    );
+    for (const t of dueTasks) {
+      if (new Date(t.remind_at).getTime() > now) continue;
+      const client = t.contact_name || t.conv_guest_name || t.guest_name || '';
+      await sendPush(app, {
+        title: '⏰ Alerta de tarea' + (t.high_priority ? ' 🔴' : ''),
+        body: (client ? client + ': ' : '') + (t.message_text || '').slice(0, 120),
+      });
+      await db.run('UPDATE tasks SET remind_sent_at = CURRENT_TIMESTAMP WHERE id = ?', [t.id]);
+      if (io) io.emit('tasks_changed');
+      console.log('⏰ Alerta enviada de la tarea #' + t.id);
+    }
+
+    // 2. Conversaciones sin responder (umbral por empresa, defecto 4h)
+    const company = await db.get('SELECT * FROM companies WHERE id = 1');
+    const alertHours = (company && company.alert_hours) || 4;
+    const convs = await db.all(
+      `SELECT * FROM conversations
+       WHERE last_incoming_at IS NOT NULL
+         AND (last_outgoing_at IS NULL OR last_outgoing_at < last_incoming_at)`
+    );
+    for (const c of convs) {
+      const waitedMs = now - new Date(c.last_incoming_at).getTime();
+      if (waitedMs < alertHours * 3600 * 1000) continue;
+      // Ya avisada de este mensaje: no repetir
+      if (c.unanswered_alerted_at && new Date(c.unanswered_alerted_at) >= new Date(c.last_incoming_at)) continue;
+
+      const hours = Math.floor(waitedMs / 3600000);
+      await sendPush(app, {
+        title: '⚠️ Conversación sin responder',
+        body: `${c.guest_name || c.guest_phone} lleva ${hours}h esperando respuesta`,
+      });
+      await db.run('UPDATE conversations SET unanswered_alerted_at = CURRENT_TIMESTAMP WHERE id = ?', [c.id]);
+      if (io) io.emit('tasks_changed');
+      console.log('⚠️ Aviso de sin responder: conversación #' + c.id);
+    }
+  } catch (err) {
+    console.error('⚠️ Error en el motor de alertas:', err.message);
+  }
+}
+
 // Tareas programadas del servidor
 function startCronJobs(io, app) {
-  // Cada 5 minutos: mensajes programados (en Sprint 4 se añadirá aquí el motor de alertas)
+  // Cada 5 minutos: mensajes programados + motor de alertas
   cron.schedule('*/5 * * * *', () => processScheduledMessages(io, app));
+  cron.schedule('*/5 * * * *', () => processAlerts(io, app));
 
   // Lunes a las 08:00: ping a Supabase para evitar la pausa del plan gratuito
   cron.schedule('0 8 * * 1', async () => {
@@ -102,7 +158,7 @@ function startCronJobs(io, app) {
     }
   });
 
-  console.log('⏰ Cron activo: mensajes programados (cada 5 min) + ping Supabase (lunes 08:00)');
+  console.log('⏰ Cron activo: mensajes programados + alertas (cada 5 min) + ping Supabase (lunes 08:00)');
 }
 
-module.exports = { startCronJobs, processScheduledMessages };
+module.exports = { startCronJobs, processScheduledMessages, processAlerts };

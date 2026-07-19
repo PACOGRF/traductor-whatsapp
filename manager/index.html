@@ -84,15 +84,19 @@
     </div>
   </main>
 
-  <!-- ── Columna derecha: tareas pendientes (25%) ── -->
+  <!-- ── Columna derecha (D9): tareas de la conversación + alertas globales ── -->
   <aside id="tasks-panel">
     <div id="tasks-header">
       <button id="tasks-back-btn" class="tasks-back-btn">←</button>
-      <span>TAREAS PENDIENTES</span>
-      <span id="tasks-estado-label">ESTADO</span>
+      <span>TAREAS</span>
+      <button id="open-tasks-screen" title="Ver todas las tareas de todos los clientes">📋 Ver todas</button>
     </div>
     <div id="tasks-list">
-      <div class="tasks-empty">Sin tareas pendientes.<br>Usa 📌 en los mensajes para añadir.</div>
+      <div class="tasks-empty">Sin tareas en esta conversación.<br>Usa 📌 en los mensajes para añadir.</div>
+    </div>
+    <div id="alerts-header">⚠️ ALERTAS VENCIDAS</div>
+    <div id="alerts-list">
+      <div class="tasks-empty">Sin alertas vencidas 🎉</div>
     </div>
   </aside>
 
@@ -144,6 +148,94 @@
       <button id="schedule-cancel">Cancelar</button>
       <button id="schedule-save">Programar</button>
     </div>
+  </div>
+</div>
+
+<!-- Modal: chincheta 📌 — crear tarea o nota anclada -->
+<div id="task-overlay" class="hidden"></div>
+<div id="task-modal" class="hidden">
+  <div id="task-header">
+    <span id="task-title">📌 Nueva tarea</span>
+    <button id="task-close">✕</button>
+  </div>
+  <div id="task-body">
+
+    <div id="task-anchored-preview" class="hidden"></div>
+
+    <label class="task-check-row" id="task-astask-row">
+      <input type="checkbox" id="task-astask" checked>
+      <span>Añadir a tareas pendientes <small>(si lo desmarcas, quedará solo como nota anclada al mensaje)</small></span>
+    </label>
+
+    <div id="task-client-row" class="hidden">
+      <label for="task-client">Cliente*</label>
+      <select id="task-client"></select>
+    </div>
+
+    <label for="task-text">Comentario / descripción*</label>
+    <textarea id="task-text" rows="3" placeholder="Qué hay que hacer…"></textarea>
+
+    <div id="task-fields">
+      <label for="task-assigned">Responsable</label>
+      <select id="task-assigned"></select>
+
+      <label for="task-remind">Alerta (avisar en…)</label>
+      <select id="task-remind">
+        <option value="">Sin alerta</option>
+        <option value="1h">1 hora</option>
+        <option value="3h">3 horas</option>
+        <option value="24h">1 día</option>
+        <option value="48h">2 días</option>
+        <option value="custom">Fecha y hora concreta…</option>
+      </select>
+      <input type="datetime-local" id="task-remind-custom" class="hidden">
+
+      <label for="task-due">Fecha límite (opcional)</label>
+      <input type="datetime-local" id="task-due">
+
+      <label class="task-check-row">
+        <input type="checkbox" id="task-priority">
+        <span>🔴 Prioridad alta</span>
+      </label>
+    </div>
+
+    <div class="task-actions">
+      <button id="task-cancel" class="btn-secondary">Cancelar</button>
+      <button id="task-save" class="btn-primary">Guardar tarea</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pantalla TAREAS: tabla completa de todas las tareas -->
+<div id="tasks-screen" class="hidden">
+  <div id="tasks-screen-header">
+    <span>📋 TAREAS</span>
+    <div>
+      <button id="tasks-add-btn">+ Añadir tarea</button>
+      <button id="tasks-screen-close">✕</button>
+    </div>
+  </div>
+  <div id="tasks-filters">
+    <input id="tasks-search" type="text" placeholder="🔍 Buscar por cliente o texto…">
+    <select id="tasks-filter-status">
+      <option value="">Todos los estados</option>
+      <option value="pending">Pendientes</option>
+      <option value="in_progress">En curso</option>
+      <option value="done">Realizadas</option>
+    </select>
+    <select id="tasks-filter-assigned"></select>
+  </div>
+  <div id="tasks-table-wrap">
+    <table id="tasks-table">
+      <thead>
+        <tr>
+          <th>Cliente</th><th>Resumen</th><th>Responsable</th>
+          <th>Estado</th><th>Alerta</th><th>F. límite</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="tasks-table-body"></tbody>
+    </table>
+    <div id="tasks-cards"></div>
   </div>
 </div>
 
