@@ -349,7 +349,7 @@ router.get('/alerts', async (req, res) => {
     const company = await db.get('SELECT alert_hours FROM companies WHERE id = 1');
     const alertHours = (company && company.alert_hours) || 4;
     const convs = await db.all(`
-      SELECT c.id, c.guest_name, c.guest_phone, ct.name AS contact_name,
+      SELECT c.id, c.guest_name, c.guest_phone, c.unanswered_dismissed_at, ct.name AS contact_name,
         (SELECT m.created_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message_at,
         (SELECT m.direction FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_direction
       FROM conversations c
@@ -359,6 +359,8 @@ router.get('/alerts', async (req, res) => {
       if (c.last_direction !== 'incoming' || !c.last_message_at) continue;
       const hours = (now - new Date(c.last_message_at).getTime()) / 3600000;
       if (hours < alertHours) continue;
+      // Descartada manualmente y sin mensajes nuevos desde entonces: no mostrar
+      if (c.unanswered_dismissed_at && new Date(c.unanswered_dismissed_at) >= new Date(c.last_message_at)) continue;
       alerts.push({
         type: 'unanswered', task_id: null, conversation_id: c.id,
         client: c.contact_name || c.guest_name || c.guest_phone,
@@ -643,6 +645,147 @@ router.post('/employees/:id/reset-password', requireRole('manager'), async (req,
     const { logAudit } = require('../services/audit');
     await logAudit(req.user.company_id, req.user.user_id, 'password_reset', { user_id: user.id });
     res.json({ ok: true, temp_password: temp });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── CONTACTOS Y GRUPOS (Sprint 3) ──────────────────────
+
+// Listado de contactos (pantalla CONTACTOS; visible para todos los roles)
+router.get('/contacts', async (req, res) => {
+  try {
+    const rows = await db.all(
+      `SELECT ct.*, g.name AS group_name
+       FROM contacts ct
+       LEFT JOIN contact_groups g ON g.id = ct.group_id
+       WHERE ct.company_id = ? AND ct.deleted_at IS NULL
+       ORDER BY ct.name`,
+      [req.user?.company_id || 1]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Crear grupo de clientes (mismo patrón que los puestos, D2/D3)
+router.post('/contact-groups', requireRole('manager', 'supervisor'), async (req, res) => {
+  try {
+    const name = (req.body.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'El nombre del grupo es obligatorio' });
+    const companyId = req.user.company_id || 1;
+    let g = await db.get('SELECT * FROM contact_groups WHERE company_id = ? AND LOWER(name) = LOWER(?)', [companyId, name]);
+    if (!g) {
+      await db.run('INSERT INTO contact_groups (company_id, name) VALUES (?, ?)', [companyId, name]);
+      g = await db.get('SELECT * FROM contact_groups WHERE company_id = ? AND LOWER(name) = LOWER(?)', [companyId, name]);
+      const { logAudit } = require('../services/audit');
+      await logAudit(companyId, req.user.user_id, 'group_created', { group_id: g.id, name });
+    }
+    res.json(g);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Editar ficha (gestor y supervisor)
+router.put('/contacts/:id', requireRole('manager', 'supervisor'), async (req, res) => {
+  try {
+    const companyId = req.user.company_id || 1;
+    const contact = await db.get('SELECT * FROM contacts WHERE id = ? AND company_id = ? AND deleted_at IS NULL', [req.params.id, companyId]);
+    if (!contact) return res.status(404).json({ error: 'Contacto no encontrado' });
+
+    const { name, phone, company_name, group_id, group_name, preferred_language, permanent_notes } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'El nombre es obligatorio' });
+
+    const cleanPhone = (phone || '').trim() || null;
+    if (cleanPhone && cleanPhone !== contact.phone) {
+      const dup = await db.get('SELECT id FROM contacts WHERE company_id = ? AND phone = ? AND id <> ?', [companyId, cleanPhone, contact.id]);
+      if (dup) return res.status(409).json({ error: 'Ya existe otro contacto con ese teléfono' });
+    }
+
+    // Grupo: por id, o por nombre creándolo (patrón "+ Añadir grupo")
+    let gid = group_id !== undefined ? (group_id || null) : contact.group_id;
+    if (group_name && group_name.trim()) {
+      const gname = group_name.trim();
+      let g = await db.get('SELECT id FROM contact_groups WHERE company_id = ? AND LOWER(name) = LOWER(?)', [companyId, gname]);
+      if (!g) {
+        await db.run('INSERT INTO contact_groups (company_id, name) VALUES (?, ?)', [companyId, gname]);
+        g = await db.get('SELECT id FROM contact_groups WHERE company_id = ? AND LOWER(name) = LOWER(?)', [companyId, gname]);
+      }
+      gid = g.id;
+    }
+
+    await db.run(
+      `UPDATE contacts SET name = ?, phone = ?, company_name = ?, group_id = ?, preferred_language = ?, permanent_notes = ?
+       WHERE id = ?`,
+      [name.trim(), cleanPhone, company_name || null, gid, preferred_language || null, permanent_notes || null, contact.id]
+    );
+
+    // Idioma preferido: se aplica a sus conversaciones para la traducción
+    if (preferred_language) {
+      await db.run('UPDATE conversations SET guest_language = ? WHERE contact_id = ?', [preferred_language, contact.id]);
+    }
+
+    const { logAudit } = require('../services/audit');
+    await logAudit(companyId, req.user.user_id, 'contact_updated', { contact_id: contact.id });
+    res.json(await db.get('SELECT * FROM contacts WHERE id = ?', [contact.id]));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Borrado lógico de ficha
+router.delete('/contacts/:id', requireRole('manager', 'supervisor'), async (req, res) => {
+  try {
+    await db.run('UPDATE contacts SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND company_id = ?', [req.params.id, req.user.company_id || 1]);
+    const { logAudit } = require('../services/audit');
+    await logAudit(req.user.company_id, req.user.user_id, 'contact_deleted', { contact_id: Number(req.params.id) });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Iniciar conversación con un contacto (botón ➕ de la lista)
+// Si ya tiene conversación → se abre. Si nunca escribió → enlace de invitación t.me
+router.post('/conversations/start', async (req, res) => {
+  try {
+    const companyId = req.user?.company_id || 1;
+    const contact = await db.get('SELECT * FROM contacts WHERE id = ? AND company_id = ? AND deleted_at IS NULL', [req.body.contact_id, companyId]);
+    if (!contact) return res.status(404).json({ error: 'Contacto no encontrado' });
+
+    const conv = await db.get(
+      'SELECT * FROM conversations WHERE contact_id = ? ORDER BY updated_at DESC LIMIT 1',
+      [contact.id]
+    );
+    if (conv) return res.json({ conversation_id: conv.id });
+
+    // Restricción del canal: Telegram no permite que la empresa escriba primero.
+    // Enlace de invitación con el contacto vinculado (al pulsarlo, ChatLink lo reconoce)
+    const company = await db.get('SELECT telegram_bot_token FROM companies WHERE id = ?', [companyId]);
+    if (!company || !company.telegram_bot_token) {
+      return res.json({ invite_link: null, reason: 'Telegram no está configurado todavía' });
+    }
+    const { getMe } = require('../services/telegram');
+    const me = await getMe(company.telegram_bot_token);
+    if (!me.ok) return res.json({ invite_link: null, reason: 'No se pudo consultar el bot' });
+    res.json({ invite_link: `https://t.me/${me.result.username}?start=c${contact.id}`, contact_name: contact.name });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Descartar la alerta "sin responder" de una conversación (reaparece si el cliente escribe de nuevo)
+router.post('/conversations/:id/dismiss-alert', async (req, res) => {
+  try {
+    await db.run('UPDATE conversations SET unanswered_dismissed_at = CURRENT_TIMESTAMP WHERE id = ?', [req.params.id]);
+    const { logAudit } = require('../services/audit');
+    await logAudit(req.user?.company_id, req.user?.user_id, 'alert_dismissed', { conversation_id: Number(req.params.id) });
+    const io = req.app.get('io');
+    if (io) io.emit('tasks_changed');
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Búsqueda en el texto de los mensajes (lupa 🔍 de la lista)
+router.get('/conversations-search', async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    if (!q) return res.json([]);
+    const rows = await db.all(
+      'SELECT DISTINCT conversation_id FROM messages WHERE original_text ILIKE ? OR translated_text ILIKE ?',
+      ['%' + q + '%', '%' + q + '%']
+    );
+    res.json(rows.map(r => r.conversation_id));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

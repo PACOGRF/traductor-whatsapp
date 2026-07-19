@@ -1220,3 +1220,10 @@ body {
 /* Tarjeta de tarea aún más compacta: prioridad + comentario seguidos en la primera línea */
 .tc-top { align-items: flex-start; }
 .tc-top .tc-main { flex: 1; min-width: 0; color: #333; margin-right: 6px; line-height: 1.35; }
+
+/* Botón de descartar en las alertas "sin responder" */
+.al-dismiss {
+  float: right; background: none; border: none; cursor: pointer;
+  font-size: 0.75rem; color: #b3362f; opacity: 0.5; padding: 0 2px;
+}
+.al-dismiss:hover { opacity: 1; }

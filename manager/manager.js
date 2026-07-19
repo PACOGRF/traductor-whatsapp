@@ -78,6 +78,14 @@ socket.on('message_sent', ({ conversation, message }) => {
       renderMessages();
     }
   }
+  // Al responder se apaga la alerta "sin responder": refrescar badge y panel de alertas
+  const conv = state.conversations.find(c => c.id === conversation.id);
+  if (conv) {
+    conv.last_direction = 'outgoing';
+    conv.unanswered_hours = null;
+    renderConvList();
+  }
+  loadAlerts();
 });
 
 // Ficha de cliente guardada o vinculada (tras confirmar, o cliente ya conocido)
@@ -442,6 +450,7 @@ function renderAlerts() {
     const late = mins >= 1440 ? Math.floor(mins / 1440) + ' d' : mins >= 60 ? Math.floor(mins / 60) + ' h' : mins + ' min';
     return `
       <div class="alert-item" data-conv="${a.conversation_id || ''}">
+        ${a.type === 'unanswered' ? `<button class="al-dismiss" data-conv="${a.conversation_id}" title="Descartar esta alerta">✕</button>` : ''}
         <span class="al-client">${a.high_priority ? '🔴 ' : ''}${esc(a.client)}</span>
         <span class="al-late">· ${a.type === 'due' ? '📅 límite' : a.type === 'unanswered' ? '⚠️ sin responder' : '⏰ aviso'} hace ${late}</span>
         <div class="al-text">${esc(truncate(a.text || '', 70))}</div>
@@ -451,6 +460,12 @@ function renderAlerts() {
     item.addEventListener('click', () => {
       const convId = Number(item.dataset.conv);
       if (convId) { closeTasksScreen(); selectConversation(convId); }
+    }));
+  el.querySelectorAll('.al-dismiss').forEach(btn =>
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const r = await apiFetch(`/api/conversations/${btn.dataset.conv}/dismiss-alert`, { method: 'POST' });
+      if (r) { await loadAlerts(); showToast('Alerta descartada (volverá si el cliente escribe de nuevo)'); }
     }));
 }
 
