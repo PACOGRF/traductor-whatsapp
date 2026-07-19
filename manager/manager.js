@@ -388,10 +388,9 @@ function taskCardHtml(t, showClient) {
   return `
     <div class="task-card ${overdue ? 'overdue-card' : ''}">
       <div class="tc-top">
-        <span>${t.high_priority ? '<span class="prio-dot">🔴</span> ' : ''}<strong>${showClient ? esc(t.client_label || '') : ''}</strong></span>
+        <span class="tc-main">${t.high_priority ? '<span class="prio-dot">🔴</span> ' : ''}${showClient && t.client_label ? `<strong>${esc(t.client_label)}</strong> · ` : ''}${esc(truncate(t.message_text || '', 100))}</span>
         <button class="status-pill status-${t.status}" data-id="${t.id}" data-status="${t.status}" title="Cambiar estado">${STATUS_LABELS[t.status] || t.status}</button>
       </div>
-      <div class="tc-text">${esc(truncate(t.message_text || '', 110))}</div>
       <div class="tc-bottom">
         <div class="tc-meta">
           ${t.assigned_label ? `<span>👤 ${esc(t.assigned_label)}</span>` : ''}
