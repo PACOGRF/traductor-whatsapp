@@ -261,10 +261,28 @@ function renderMessages() {
         <span class="note-author">📝 ${esc(n.author || 'Equipo')}</span>${esc(n.text)}
       </div>`).join('');
 
+    // Archivos adjuntos (Sprint 5): miniatura, reproductor o enlace según el tipo
+    let mediaHtml = '';
+    if (m.storage_path) {
+      const u = m.signed_url || '#';
+      if (m.media_type === 'image') {
+        mediaHtml = `<a href="${u}" target="_blank" rel="noopener"><img class="msg-img" src="${u}" alt="${esc(m.media_url || 'imagen')}"></a>`;
+      } else if (m.media_type === 'video') {
+        mediaHtml = `<video class="msg-video" src="${u}" controls preload="metadata"></video>`;
+      } else if (m.media_type === 'audio') {
+        mediaHtml = `<audio class="msg-audio" src="${u}" controls></audio>`;
+      } else {
+        mediaHtml = `<a class="msg-doc" href="${u}" target="_blank" rel="noopener">📄 ${esc(m.media_url || 'documento')}</a>`;
+      }
+      // Si el texto es solo la etiqueta automática del archivo, no repetirlo
+      if (m.original_text === `📎 ${m.media_url}`) { mainText = ''; subText = ''; }
+    }
+
     return `${dateDivider}
       <div class="msg-bubble ${cls}" data-msg-id="${m.id}">
         <button class="msg-pin-btn" data-msg-id="${m.id}" title="Crear tarea o nota de este mensaje">📌</button>
-        <div class="msg-original">${mainText}</div>
+        ${mediaHtml}
+        ${mainText ? `<div class="msg-original">${mainText}</div>` : ''}
         ${subText}
         <span class="msg-time">${time}</span>
       </div>${notesHtml}`;
@@ -683,6 +701,7 @@ async function selectConversation(id) {
   msgInput.disabled = readonly;
   sendBtn.disabled = readonly;
   $('schedule-btn').disabled = readonly;
+  $('attach-btn').disabled = readonly;
 
   // Mostrar chat, ocultar bienvenida
   welcomeScreen.style.display = 'none';
@@ -724,6 +743,36 @@ async function sendReply() {
   sendBtn.disabled = false;
   msgInput.focus();
 }
+
+/* ── Archivos (Sprint 5): clip 📎 ────────────────────── */
+$('attach-btn').addEventListener('click', () => {
+  if (!state.activeConvId) { showToast('Selecciona una conversación primero'); return; }
+  $('file-input').click();
+});
+
+$('file-input').addEventListener('change', async () => {
+  const file = $('file-input').files[0];
+  $('file-input').value = '';
+  if (!file || !state.activeConvId) return;
+  if (file.size > 16 * 1024 * 1024) { showToast('⚠️ El archivo supera el límite de 16 MB'); return; }
+
+  showToast('📎 Subiendo ' + file.name + '…', 8000);
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const res = await fetch(`/api/conversations/${state.activeConvId}/files`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + localStorage.getItem('chatlink_token') },
+      body: fd,
+    });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.error || 'No se pudo enviar el archivo', 6000); return; }
+    showToast('📎 Archivo enviado ✓');
+    // El mensaje aparece en el hilo por el evento message_sent del socket
+  } catch {
+    showToast('Error de conexión al subir el archivo');
+  }
+});
 
 /* ── Programar mensaje ──────────────────────────────── */
 const scheduleModal   = $('schedule-modal');

@@ -61,10 +61,72 @@ router.get('/conversations/:id/messages', async (req, res) => {
       'SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC',
       [req.params.id]
     );
+    // Archivos: añadir URL firmada temporal para ver/descargar (Sprint 5)
+    const { signedUrl } = require('../services/storage');
+    for (const r of rows) {
+      if (r.storage_path) r.signed_url = await signedUrl(r.storage_path);
+    }
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── ARCHIVOS (Sprint 5): subir y enviar por el canal ──
+const multer = require('multer');
+const uploadMw = multer({ storage: multer.memoryStorage(), limits: { fileSize: 16 * 1024 * 1024 } });
+
+router.post('/conversations/:id/files', (req, res) => {
+  uploadMw.single('file')(req, res, async (err) => {
+    try {
+      if (err) {
+        return res.status(400).json({
+          error: err.code === 'LIMIT_FILE_SIZE' ? 'El archivo supera el límite de 16 MB' : 'Error al subir el archivo',
+        });
+      }
+      if (!req.file) return res.status(400).json({ error: 'No se recibió ningún archivo' });
+
+      const storage = require('../services/storage');
+      const filename = req.file.originalname || 'archivo';
+      if (!storage.extensionAllowed(filename)) {
+        return res.status(400).json({ error: 'Tipo de archivo no admitido. Permitidos: imagen, vídeo mp4, audio, PDF, Word y Excel.' });
+      }
+      if (!storage.storageEnabled()) {
+        return res.status(400).json({ error: 'El almacenamiento no está configurado (falta SUPABASE_SERVICE_KEY en Render)' });
+      }
+
+      // Permiso de respuesta (los empleados "solo leer" no envían)
+      const { accessForConversation } = require('../services/visibility');
+      const { conv, access } = await accessForConversation(req.user, req.params.id);
+      if (!conv) return res.status(404).json({ error: 'Conversación no encontrada' });
+      if (access !== 'reply') return res.status(403).json({ error: 'No tienes permiso para enviar en esta conversación' });
+
+      const mediaType = storage.mediaTypeFor(filename);
+      const pathInBucket = `companies/${req.user?.company_id || 1}/conversations/${conv.id}/${Date.now()}_${storage.safeName(filename)}`;
+      const up = await storage.uploadBuffer(pathInBucket, req.file.buffer, req.file.mimetype);
+      if (!up.ok) return res.status(502).json({ error: up.error });
+
+      const fileUrl = await storage.signedUrl(pathInBucket, 3600);
+      const { sendFileViaChannel } = require('../services/messaging');
+      const sent = await sendFileViaChannel(conv, fileUrl, mediaType);
+      if (!sent.ok) return res.status(502).json({ error: 'No se pudo enviar por el canal: ' + sent.error });
+
+      await db.run(
+        `INSERT INTO messages (conversation_id, direction, original_text, media_url, media_type, storage_path, sender_user_id)
+         VALUES (?, 'outgoing', ?, ?, ?, ?, ?)`,
+        [conv.id, `📎 ${filename}`, filename, mediaType, pathInBucket, req.user?.user_id || null]
+      );
+      await db.run('UPDATE conversations SET last_outgoing_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [conv.id]);
+      const msg = await db.get('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1', [conv.id]);
+      msg.signed_url = fileUrl;
+
+      const io = req.app.get('io');
+      if (io) io.emit('message_sent', { conversation: conv, message: msg });
+      res.json(msg);
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
 });
 
 // Respuestas rápidas

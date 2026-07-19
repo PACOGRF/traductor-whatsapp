@@ -50,6 +50,36 @@ function shareContactKeyboard(buttonLabel) {
 // Quitar el teclado tras usarlo
 const removeKeyboard = { reply_markup: { remove_keyboard: true } };
 
+// Datos de un archivo recibido (para descargarlo)
+function getFile(botToken, fileId) {
+  return tgCall(botToken, 'getFile', { file_id: fileId });
+}
+
+// Descarga el contenido de un archivo del canal → Buffer (o null)
+async function downloadFile(botToken, filePath) {
+  try {
+    const res = await fetch(`${TG_API}/file/bot${botToken}/${filePath}`);
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+// Enviar un archivo por URL (Telegram lo descarga de la URL firmada)
+function sendFile(botToken, chatId, url, mediaType, caption) {
+  const map = {
+    image: ['sendPhoto', 'photo'],
+    video: ['sendVideo', 'video'],
+    audio: ['sendAudio', 'audio'],
+    document: ['sendDocument', 'document'],
+  };
+  const [method, field] = map[mediaType] || map.document;
+  const payload = { chat_id: chatId, [field]: url };
+  if (caption) payload.caption = caption;
+  return tgCall(botToken, method, payload);
+}
+
 // Registrar el webhook del bot apuntando a nuestro servidor
 function setWebhook(botToken, url, secretToken) {
   return tgCall(botToken, 'setWebhook', {
@@ -68,4 +98,4 @@ function webhookSecret(botToken) {
   return crypto.createHmac('sha256', key).update(botToken).digest('hex').slice(0, 48);
 }
 
-module.exports = { getMe, sendMessage, setWebhook, webhookSecret, shareContactKeyboard, removeKeyboard };
+module.exports = { getMe, sendMessage, setWebhook, webhookSecret, shareContactKeyboard, removeKeyboard, getFile, downloadFile, sendFile };

@@ -1227,3 +1227,31 @@ body {
   font-size: 0.75rem; color: #b3362f; opacity: 0.5; padding: 0 2px;
 }
 .al-dismiss:hover { opacity: 1; }
+
+/* ═══════════ ARCHIVOS (Sprint 5) ═══════════ */
+#file-input { display: none; }
+#attach-btn {
+  background: rgba(255,255,255,0.12);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 44px; height: 44px;
+  color: white;
+  font-size: 1.05rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+#attach-btn:hover { background: var(--green-mid); }
+#attach-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+.msg-img { max-width: 240px; max-height: 240px; border-radius: 8px; display: block; margin: 2px 0 4px; cursor: pointer; }
+.msg-video { max-width: 260px; border-radius: 8px; display: block; margin: 2px 0 4px; }
+.msg-audio { max-width: 240px; display: block; margin: 2px 0 4px; }
+.msg-doc {
+  display: inline-block; background: rgba(0,0,0,0.06); border-radius: 8px;
+  padding: 6px 10px; margin: 2px 0 4px; color: #075e54; font-weight: 600;
+  text-decoration: none; font-size: 0.85rem; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.msg-doc:hover { background: rgba(0,0,0,0.12); }

@@ -73,12 +73,15 @@ router.post('/telegram/:companyId', express.json(), async (req, res) => {
       return;
     }
 
-    // Texto del mensaje; si es un archivo/foto, aviso hasta que llegue el Sprint 5
-    let body = tgMsg.text || tgMsg.caption || '';
-    const hasMedia = !!(tgMsg.photo || tgMsg.document || tgMsg.video || tgMsg.voice || tgMsg.audio || tgMsg.sticker);
-    if (!body && hasMedia) {
-      body = '📎 [El cliente envió un archivo — la recepción de archivos llegará en una próxima versión]';
+    // ── Archivos adjuntos (fotos, documentos, vídeo, audio): descargar y guardar ──
+    const media = extractTelegramMedia(tgMsg);
+    if (media) {
+      await handleIncomingFile(req.app, company, conv, tgMsg, media, isNewConversation);
+      return;
     }
+
+    // Texto del mensaje
+    let body = tgMsg.text || '';
     if (!body) return;
 
     // Los comandos de Telegram (/start, etc.) no son texto del cliente:
@@ -239,6 +242,104 @@ async function handleSharedContact(app, company, conv, tgMsg) {
   await sendMessage(company.telegram_bot_token, conv.guest_phone, thanks, removeKeyboard);
   const thanksMsg = await insertOutgoingMessage(conv.id, '¡Gracias! Hemos guardado su contacto. ¿En qué podemos ayudarle?', thanks);
   if (io) io.emit('message_sent', { conversation: conv, message: thanksMsg });
+}
+
+// Detecta el adjunto de un mensaje de Telegram (stickers y otros se ignoran)
+function extractTelegramMedia(tgMsg) {
+  if (tgMsg.photo && tgMsg.photo.length) {
+    const p = tgMsg.photo[tgMsg.photo.length - 1];   // mayor resolución
+    return { file_id: p.file_id, size: p.file_size, filename: 'foto_' + Date.now() + '.jpg', mediaType: 'image', mime: 'image/jpeg' };
+  }
+  if (tgMsg.document) {
+    const d = tgMsg.document;
+    return { file_id: d.file_id, size: d.file_size, filename: d.file_name || 'documento.pdf', mediaType: null, mime: d.mime_type };
+  }
+  if (tgMsg.video) {
+    return { file_id: tgMsg.video.file_id, size: tgMsg.video.file_size, filename: 'video_' + Date.now() + '.mp4', mediaType: 'video', mime: 'video/mp4' };
+  }
+  if (tgMsg.voice) {
+    return { file_id: tgMsg.voice.file_id, size: tgMsg.voice.file_size, filename: 'audio_' + Date.now() + '.ogg', mediaType: 'audio', mime: 'audio/ogg' };
+  }
+  if (tgMsg.audio) {
+    return { file_id: tgMsg.audio.file_id, size: tgMsg.audio.file_size, filename: tgMsg.audio.file_name || ('audio_' + Date.now() + '.mp3'), mediaType: 'audio', mime: tgMsg.audio.mime_type || 'audio/mpeg' };
+  }
+  return null;
+}
+
+// Descarga el archivo del canal, lo sube a Supabase Storage y lo registra en el hilo
+async function handleIncomingFile(app, company, conv, tgMsg, media, isNewConversation) {
+  const io = app.get('io');
+  const storage = require('../services/storage');
+  const { getFile, downloadFile } = require('../services/telegram');
+  const caption = tgMsg.caption || '';
+
+  // Mensaje de aviso en el hilo cuando el archivo no se puede guardar
+  async function saveNotice(text) {
+    await db.run('INSERT INTO messages (conversation_id, direction, original_text) VALUES (?, ?, ?)', [conv.id, 'incoming', text]);
+    const m = await db.get('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1', [conv.id]);
+    if (io) io.emit('new_message', { conversation: conv, message: m });
+  }
+
+  const mediaType = media.mediaType || storage.mediaTypeFor(media.filename);
+  if (!storage.extensionAllowed(media.filename)) {
+    return saveNotice(`📎 [El cliente envió un tipo de archivo no admitido: ${media.filename}]`);
+  }
+  if (media.size && media.size > storage.MAX_FILE_BYTES) {
+    return saveNotice(`📎 [Archivo demasiado grande (máx. 16 MB): ${media.filename}]`);
+  }
+  if (!storage.storageEnabled()) {
+    return saveNotice(`📎 [${media.filename} recibido, pero el almacenamiento de archivos no está configurado]`);
+  }
+
+  const info = await getFile(company.telegram_bot_token, media.file_id);
+  if (!info.ok || !info.result?.file_path) {
+    return saveNotice(`📎 [No se pudo descargar el archivo del canal: ${media.filename}]`);
+  }
+  const buffer = await downloadFile(company.telegram_bot_token, info.result.file_path);
+  if (!buffer) return saveNotice(`📎 [No se pudo descargar el archivo: ${media.filename}]`);
+  if (buffer.length > storage.MAX_FILE_BYTES) {
+    return saveNotice(`📎 [Archivo demasiado grande (máx. 16 MB): ${media.filename}]`);
+  }
+
+  const pathInBucket = `companies/${company.id}/conversations/${conv.id}/${Date.now()}_${storage.safeName(media.filename)}`;
+  const up = await storage.uploadBuffer(pathInBucket, buffer, media.mime);
+  if (!up.ok) return saveNotice(`📎 [Error guardando ${media.filename}: ${up.error}]`);
+
+  // El pie de foto se traduce como un mensaje normal
+  let original = caption || `📎 ${media.filename}`;
+  let translated = null, lang = null;
+  if (caption) {
+    const r = await translateWithDetection(caption, 'es');
+    translated = r.translatedText;
+    lang = r.detectedLanguage;
+    if (lang && lang !== conv.guest_language) {
+      await db.run('UPDATE conversations SET guest_language = ? WHERE id = ?', [lang, conv.id]);
+      conv.guest_language = lang;
+    }
+  }
+
+  await db.run(
+    'UPDATE conversations SET last_incoming_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [conv.id]
+  );
+  await db.run(
+    `INSERT INTO messages (conversation_id, direction, original_text, translated_text, language_detected, media_url, media_type, storage_path)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [conv.id, 'incoming', original, translated, lang, media.filename, mediaType, pathInBucket]
+  );
+  const msg = await db.get('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1', [conv.id]);
+  msg.signed_url = await storage.signedUrl(pathInBucket);
+
+  if (io) io.emit('new_message', { conversation: conv, message: msg });
+  await sendPush(app, {
+    title: `✈️ ${conv.guest_name || 'Cliente Telegram'}`,
+    body: `📎 ${media.filename}`,
+  });
+
+  if (isNewConversation) {
+    await sendWelcome(app, company, conv);
+    await proposeNewClient(app, conv);
+  }
 }
 
 module.exports = router;

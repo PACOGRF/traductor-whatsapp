@@ -86,4 +86,23 @@ async function sendViaChannel(conv, translatedText, phoneNumberId = null) {
   }
 }
 
-module.exports = { translateOutgoing, insertOutgoingMessage, sendViaChannel };
+// Envía un archivo (mediante URL firmada) por el canal de la conversación
+async function sendFileViaChannel(conv, fileUrl, mediaType, caption = null) {
+  if (conv.channel === 'telegram') {
+    const { sendFile } = require('./telegram');
+    const company = await db.get('SELECT telegram_bot_token FROM companies WHERE id = ?', [conv.company_id || 1]);
+    if (!company || !company.telegram_bot_token) {
+      return { ok: false, error: 'Telegram no está configurado para esta empresa' };
+    }
+    const r = await sendFile(company.telegram_bot_token, conv.guest_phone, fileUrl, mediaType, caption);
+    return r.ok ? { ok: true } : { ok: false, error: 'Telegram: ' + (r.description || 'error desconocido') };
+  }
+  // WhatsApp: el envío de archivos se activará con WhatsApp (Sprint 6). En demo se simula.
+  if (!process.env.WHATSAPP_ACCESS_TOKEN) {
+    console.log(`[DEMO] Enviaría archivo a ${conv.guest_phone}: ${fileUrl}`);
+    return { ok: true, demo: true };
+  }
+  return { ok: false, error: 'El envío de archivos por WhatsApp llegará al activar WhatsApp' };
+}
+
+module.exports = { translateOutgoing, insertOutgoingMessage, sendViaChannel, sendFileViaChannel };
