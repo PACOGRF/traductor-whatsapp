@@ -1211,3 +1211,8 @@ body {
   #employees-cards { display: block; }
   .nav-btn { font-size: 0.68rem; padding: 8px 10px; }
 }
+
+/* Tarjeta de tarea compacta: fechas e iconos de acción en la misma línea */
+.tc-bottom { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-top: 4px; }
+.tc-bottom .tc-meta { flex: 1; min-width: 0; }
+.tc-bottom .tc-actions { margin-top: 0; flex-shrink: 0; }

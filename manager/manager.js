@@ -392,15 +392,17 @@ function taskCardHtml(t, showClient) {
         <button class="status-pill status-${t.status}" data-id="${t.id}" data-status="${t.status}" title="Cambiar estado">${STATUS_LABELS[t.status] || t.status}</button>
       </div>
       <div class="tc-text">${esc(truncate(t.message_text || '', 110))}</div>
-      <div class="tc-meta">
-        ${t.assigned_label ? `<span>👤 ${esc(t.assigned_label)}</span>` : ''}
-        ${t.remind_at ? `<span class="${t.status !== 'done' && new Date(t.remind_at) < new Date() ? 'overdue' : ''}">⏰ ${fmtDT(t.remind_at)}</span>` : ''}
-        ${t.due_at ? `<span class="${t.status !== 'done' && new Date(t.due_at) < new Date() ? 'overdue' : ''}">📅 ${fmtDT(t.due_at)}</span>` : ''}
-      </div>
-      <div class="tc-actions">
-        ${t.anchored_message_id ? `<button class="task-goto-btn" data-conv="${t.conversation_id}" data-msg="${t.anchored_message_id}" title="Ir al mensaje">💬</button>` : ''}
-        <button class="task-edit-btn" data-id="${t.id}" title="Editar">✏️</button>
-        <button class="task-del-btn" data-id="${t.id}" title="Eliminar">🗑️</button>
+      <div class="tc-bottom">
+        <div class="tc-meta">
+          ${t.assigned_label ? `<span>👤 ${esc(t.assigned_label)}</span>` : ''}
+          ${t.remind_at ? `<span class="${t.status !== 'done' && new Date(t.remind_at) < new Date() ? 'overdue' : ''}">⏰ ${fmtDT(t.remind_at)}</span>` : ''}
+          ${t.due_at ? `<span class="${t.status !== 'done' && new Date(t.due_at) < new Date() ? 'overdue' : ''}">📅 ${fmtDT(t.due_at)}</span>` : ''}
+        </div>
+        <div class="tc-actions">
+          ${t.anchored_message_id ? `<button class="task-goto-btn" data-conv="${t.conversation_id}" data-msg="${t.anchored_message_id}" title="Ir al mensaje">💬</button>` : ''}
+          <button class="task-edit-btn" data-id="${t.id}" title="Editar">✏️</button>
+          <button class="task-del-btn" data-id="${t.id}" title="Eliminar">🗑️</button>
+        </div>
       </div>
     </div>`;
 }
