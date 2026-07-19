@@ -36,8 +36,15 @@ function registerChatHandlers(io, app) {
         const conv = await db.get('SELECT * FROM conversations WHERE id = ?', [conversationId]);
         if (!conv) return socket.emit('error', { msg: 'Conversación no encontrada' });
 
+        // Permisos por rol (Sprint 2): los empleados solo responden donde tienen permiso
+        const { accessForConversation } = require('../services/visibility');
+        const { access } = await accessForConversation(socket.user, conversationId);
+        if (access !== 'reply') {
+          return socket.emit('error', { msg: 'No tienes permiso para responder en esta conversación' });
+        }
+
         const translatedText = await translateOutgoing(conv, text, langOverride);
-        const msg = await insertOutgoingMessage(conversationId, text, translatedText);
+        const msg = await insertOutgoingMessage(conversationId, text, translatedText, socket.user?.user_id || null);
 
         io.emit('message_sent', { conversation: conv, message: msg });
 

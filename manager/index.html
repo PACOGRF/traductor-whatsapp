@@ -13,6 +13,15 @@
 </head>
 <body>
 
+<!-- ── Banner superior de navegación (Sprint 2) ── -->
+<nav id="top-banner">
+  <button class="nav-btn active" id="nav-conversaciones">CONVERSACIONES</button>
+  <button class="nav-btn nav-soon" id="nav-contactos" title="Se activa en el Sprint 3">CONTACTOS</button>
+  <button class="nav-btn hidden" id="nav-empleados">EMPLEADOS</button>
+  <button class="nav-btn" id="nav-tareas">TAREAS</button>
+  <button class="nav-btn nav-soon" id="nav-configuracion" title="Se activa en el Sprint 6">CONFIGURACIÓN</button>
+</nav>
+
 <div id="app">
 
   <!-- ── Columna izquierda: lista de conversaciones (25%) ── -->
@@ -52,6 +61,9 @@
 
     <!-- Área de mensajes -->
     <div id="messages-area"></div>
+
+    <!-- Aviso solo-lectura (empleados sin permiso de respuesta) -->
+    <div id="readonly-note" class="hidden">👁️ Solo lectura: no tienes permiso para responder en esta conversación</div>
 
     <!-- Barra inferior -->
     <div id="bottom-bar">
@@ -202,6 +214,66 @@
     <div class="task-actions">
       <button id="task-cancel" class="btn-secondary">Cancelar</button>
       <button id="task-save" class="btn-primary">Guardar tarea</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pantalla EMPLEADOS (solo GESTOR) -->
+<div id="employees-screen" class="hidden">
+  <div id="employees-screen-header">
+    <span>👥 EMPLEADOS</span>
+    <div>
+      <button id="employees-add-btn">+ Añadir empleado</button>
+      <button id="employees-screen-close">✕</button>
+    </div>
+  </div>
+  <div id="employees-table-wrap">
+    <table id="employees-table">
+      <thead>
+        <tr><th>Nombre y apellidos</th><th>Puesto</th><th>Usuario</th><th>Rol</th><th>Estado</th><th></th></tr>
+      </thead>
+      <tbody id="employees-table-body"></tbody>
+    </table>
+    <div id="employees-cards"></div>
+  </div>
+</div>
+
+<!-- Modal: alta/edición de empleado -->
+<div id="emp-overlay" class="hidden"></div>
+<div id="emp-modal" class="hidden">
+  <div id="emp-header">
+    <span id="emp-title">👥 Añadir empleado</span>
+    <button id="emp-close">✕</button>
+  </div>
+  <div id="emp-body">
+    <label for="emp-first">Nombre*</label>
+    <input id="emp-first" type="text">
+
+    <label for="emp-last">Apellidos*</label>
+    <input id="emp-last" type="text">
+
+    <label for="emp-position">Puesto*</label>
+    <select id="emp-position"></select>
+    <input id="emp-position-new" type="text" class="hidden" placeholder="Escribe el nombre del puesto nuevo">
+
+    <label for="emp-role">Rol*</label>
+    <select id="emp-role">
+      <option value="employee">Empleado — ve y responde sus conversaciones, crea tareas</option>
+      <option value="supervisor">Supervisor — todo menos gestión de empleados</option>
+      <option value="manager">Gestor — acceso total</option>
+    </select>
+
+    <label for="emp-username">Usuario (para entrar en ChatLink)*</label>
+    <input id="emp-username" type="text" placeholder="ej: mgarcia">
+
+    <label>Grupos de clientes visibles</label>
+    <div id="emp-groups"></div>
+
+    <div id="emp-temp-result" class="hidden"></div>
+
+    <div class="emp-actions">
+      <button id="emp-cancel" class="btn-secondary">Cancelar</button>
+      <button id="emp-save" class="btn-primary">Guardar empleado</button>
     </div>
   </div>
 </div>

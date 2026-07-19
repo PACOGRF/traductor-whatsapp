@@ -64,7 +64,18 @@ app.get('/config.js', (req, res) => {
   `);
 });
 
-// Sockets
+// Sockets — verificación de identidad al conectar (Sprint 2: permisos por rol)
+const jwtSocket = require('jsonwebtoken');
+io.use((socket, next) => {
+  try {
+    const token = socket.handshake.auth && socket.handshake.auth.token;
+    socket.user = jwtSocket.verify(token, process.env.JWT_SECRET || 'chatlink_secret');
+    next();
+  } catch {
+    next(new Error('No autorizado'));
+  }
+});
+
 const registerChatHandlers = require('./sockets/chatHandler');
 registerChatHandlers(io, app);
 

@@ -17,7 +17,7 @@ async function sendPush(app, payload) {
 router.get('/conversations', async (req, res) => {
   try {
     const rows = await db.all(`
-      SELECT c.*, ct.name AS contact_name, ct.phone AS contact_phone,
+      SELECT c.*, ct.name AS contact_name, ct.phone AS contact_phone, ct.group_id AS contact_group_id,
         (SELECT m.translated_text FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message,
         (SELECT m.created_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message_at,
         (SELECT m.direction FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_direction
@@ -29,22 +29,34 @@ router.get('/conversations', async (req, res) => {
     const company = await db.get('SELECT alert_hours FROM companies WHERE id = 1');
     const alertHours = (company && company.alert_hours) || 4;
     const now = Date.now();
-    res.json(rows.map(r => {
+    // Visibilidad por rol (D1/D2): los empleados solo ven sus grupos
+    const { getVisibility, convAccess } = require('../services/visibility');
+    const vis = await getVisibility(req.user);
+    const result = [];
+    for (const r of rows) {
+      const access = convAccess(vis, r);
+      if (access === 'none') continue;
       let unanswered_hours = null;
       if (r.last_direction === 'incoming' && r.last_message_at) {
         const h = (now - new Date(r.last_message_at).getTime()) / 3600000;
         if (h >= alertHours) unanswered_hours = Math.floor(h);
       }
-      return { ...r, unanswered_hours };
-    }));
+      result.push({ ...r, unanswered_hours, can_reply: access === 'reply' });
+    }
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Mensajes de una conversación
+// Mensajes de una conversación (los empleados solo si la conversación es visible)
 router.get('/conversations/:id/messages', async (req, res) => {
   try {
+    if (req.user?.role === 'employee') {
+      const { accessForConversation } = require('../services/visibility');
+      const { access } = await accessForConversation(req.user, req.params.id);
+      if (access === 'none') return res.status(403).json({ error: 'Sin acceso a esta conversación' });
+    }
     const rows = await db.all(
       'SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC',
       [req.params.id]
@@ -436,6 +448,180 @@ router.post('/telegram/config', requireRole('manager'), async (req, res) => {
       bot_username: me.result.username,
       link: 'https://t.me/' + me.result.username,
     });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── EMPLEADOS, PUESTOS Y GRUPOS (Sprint 2, solo GESTOR) ──
+
+// Contraseña temporal legible (el empleado la cambia obligatoriamente al entrar)
+function genTempPassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  let s = '';
+  for (let i = 0; i < 10; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+// Resuelve el puesto: por id, o por nombre creándolo si no existe (D3)
+async function resolvePosition(companyId, positionId, positionName) {
+  if (positionId) return Number(positionId);
+  const name = (positionName || '').trim();
+  if (!name) return null;
+  let p = await db.get('SELECT id FROM positions WHERE company_id = ? AND LOWER(name) = LOWER(?)', [companyId, name]);
+  if (!p) {
+    await db.run('INSERT INTO positions (company_id, name) VALUES (?, ?)', [companyId, name]);
+    p = await db.get('SELECT id FROM positions WHERE company_id = ? AND LOWER(name) = LOWER(?)', [companyId, name]);
+  }
+  return p.id;
+}
+
+// Guarda los grupos visibles del empleado (D2)
+async function saveEmployeeGroups(userId, groups) {
+  if (!Array.isArray(groups)) return;
+  await db.run('DELETE FROM user_group_visibility WHERE user_id = ?', [userId]);
+  for (const g of groups) {
+    if (!g || !g.group_id) continue;
+    await db.run(
+      'INSERT INTO user_group_visibility (user_id, group_id, can_reply) VALUES (?, ?, ?)',
+      [userId, g.group_id, g.can_reply !== false]
+    );
+  }
+}
+
+// Puestos de la empresa (autocompletado del alta)
+router.get('/positions', async (req, res) => {
+  try {
+    const rows = await db.all('SELECT * FROM positions WHERE company_id = ? ORDER BY name', [req.user?.company_id || 1]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Grupos de clientes (checkboxes de visibilidad; el CRUD llega en Sprint 3)
+router.get('/contact-groups', async (req, res) => {
+  try {
+    const rows = await db.all('SELECT * FROM contact_groups WHERE company_id = ? ORDER BY name', [req.user?.company_id || 1]);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Listado de empleados
+router.get('/employees', requireRole('manager'), async (req, res) => {
+  try {
+    const rows = await db.all(
+      `SELECT u.id, u.first_name, u.last_name, u.username, u.role, u.active,
+              u.position_id, u.must_change_password, u.created_at, p.name AS position_name
+       FROM users u LEFT JOIN positions p ON p.id = u.position_id
+       WHERE u.company_id = ?
+       ORDER BY u.active DESC, u.last_name, u.first_name`,
+      [req.user.company_id || 1]
+    );
+    const visibility = await db.all('SELECT * FROM user_group_visibility');
+    res.json(rows.map(u => ({
+      ...u,
+      groups: visibility.filter(v => v.user_id === u.id).map(v => ({ group_id: v.group_id, can_reply: v.can_reply })),
+    })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Alta de empleado → devuelve la contraseña temporal UNA sola vez
+router.post('/employees', requireRole('manager'), async (req, res) => {
+  try {
+    const { first_name, last_name, username, role, position_id, position_name, groups } = req.body;
+    if (!first_name || !first_name.trim() || !last_name || !last_name.trim()) {
+      return res.status(400).json({ error: 'Nombre y apellidos son obligatorios' });
+    }
+    if (!username || !username.trim()) return res.status(400).json({ error: 'El usuario (login) es obligatorio' });
+    if (!['manager', 'supervisor', 'employee'].includes(role)) {
+      return res.status(400).json({ error: 'Rol no válido' });
+    }
+    const clean = username.trim().toLowerCase();
+    const exists = await db.get('SELECT id FROM users WHERE username = ?', [clean]);
+    if (exists) return res.status(409).json({ error: 'Ese nombre de usuario ya existe' });
+
+    const companyId = req.user.company_id || 1;
+    const posId = await resolvePosition(companyId, position_id, position_name);
+
+    const bcrypt = require('bcryptjs');
+    const temp = genTempPassword();
+    const hash = await bcrypt.hash(temp, 10);
+
+    await db.run(
+      `INSERT INTO users (company_id, first_name, last_name, position_id, username, password_hash, role, must_change_password)
+       VALUES (?, ?, ?, ?, ?, ?, ?, true)`,
+      [companyId, first_name.trim(), last_name.trim(), posId, clean, hash, role]
+    );
+    const user = await db.get('SELECT * FROM users WHERE username = ?', [clean]);
+    await saveEmployeeGroups(user.id, groups);
+
+    const { logAudit } = require('../services/audit');
+    await logAudit(companyId, req.user.user_id, 'user_created',
+      { new_user_id: user.id, username: clean, role, position_id: posId });
+
+    res.json({ id: user.id, username: clean, temp_password: temp });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Edición de empleado (datos, puesto, rol y grupos)
+router.put('/employees/:id', requireRole('manager'), async (req, res) => {
+  try {
+    const user = await db.get('SELECT * FROM users WHERE id = ? AND company_id = ?', [req.params.id, req.user.company_id || 1]);
+    if (!user) return res.status(404).json({ error: 'Empleado no encontrado' });
+
+    const { first_name, last_name, role, position_id, position_name, groups } = req.body;
+    if (role && !['manager', 'supervisor', 'employee'].includes(role)) {
+      return res.status(400).json({ error: 'Rol no válido' });
+    }
+    // El gestor no puede quitarse a sí mismo el rol de gestor (quedaría la empresa sin gestor)
+    if (user.id === req.user.user_id && role && role !== 'manager') {
+      return res.status(400).json({ error: 'No puedes quitarte a ti mismo el rol de gestor' });
+    }
+    const posId = await resolvePosition(req.user.company_id || 1, position_id, position_name);
+
+    await db.run(
+      'UPDATE users SET first_name = ?, last_name = ?, role = ?, position_id = ? WHERE id = ?',
+      [(first_name || user.first_name).trim(), (last_name || user.last_name).trim(),
+       role || user.role, posId !== null ? posId : user.position_id, user.id]
+    );
+    if (groups !== undefined) await saveEmployeeGroups(user.id, groups);
+
+    const { logAudit } = require('../services/audit');
+    await logAudit(req.user.company_id, req.user.user_id, 'permission_change',
+      { user_id: user.id, role: role || user.role, groups: groups || null });
+
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Activar/desactivar (borrado lógico de empleados)
+router.patch('/employees/:id/active', requireRole('manager'), async (req, res) => {
+  try {
+    const user = await db.get('SELECT * FROM users WHERE id = ? AND company_id = ?', [req.params.id, req.user.company_id || 1]);
+    if (!user) return res.status(404).json({ error: 'Empleado no encontrado' });
+    if (user.id === req.user.user_id) return res.status(400).json({ error: 'No puedes desactivarte a ti mismo' });
+
+    await db.run('UPDATE users SET active = ? WHERE id = ?', [!user.active, user.id]);
+    const { logAudit } = require('../services/audit');
+    await logAudit(req.user.company_id, req.user.user_id, user.active ? 'user_deactivated' : 'user_reactivated',
+      { user_id: user.id, username: user.username });
+    res.json({ ok: true, active: !user.active });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Resetear contraseña → nueva temporal (y desbloquea la cuenta)
+router.post('/employees/:id/reset-password', requireRole('manager'), async (req, res) => {
+  try {
+    const user = await db.get('SELECT * FROM users WHERE id = ? AND company_id = ?', [req.params.id, req.user.company_id || 1]);
+    if (!user) return res.status(404).json({ error: 'Empleado no encontrado' });
+
+    const bcrypt = require('bcryptjs');
+    const temp = genTempPassword();
+    const hash = await bcrypt.hash(temp, 10);
+    await db.run(
+      'UPDATE users SET password_hash = ?, must_change_password = true, failed_attempts = 0, locked_until = NULL WHERE id = ?',
+      [hash, user.id]
+    );
+    const { logAudit } = require('../services/audit');
+    await logAudit(req.user.company_id, req.user.user_id, 'password_reset', { user_id: user.id });
+    res.json({ ok: true, temp_password: temp });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

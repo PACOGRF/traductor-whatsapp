@@ -33,8 +33,16 @@ const backBtn        = $('back-btn');
 const toast          = $('toast');
 const tasksList      = $('tasks-list');
 
-/* ── Socket.io ──────────────────────────────────────── */
-const socket = io();
+/* ── Socket.io (con identidad: permisos por rol, Sprint 2) ── */
+const socket = io({ auth: { token: authToken } });
+
+socket.on('connect_error', (err) => {
+  // Token caducado o inválido: volver al login
+  if (err && /No autorizado/i.test(err.message || '')) {
+    localStorage.removeItem('chatlink_token');
+    window.location.href = '/login.html';
+  }
+});
 
 // Unirse a la sala del número activo cuando el servidor lo indique
 socket.on('connect', () => {
@@ -653,6 +661,13 @@ async function selectConversation(id) {
     : conv.guest_phone;
   chatGuestName.textContent = `${who}${langSuffix}`;
 
+  // Permiso de respuesta (Sprint 2): empleados "solo leer" no pueden escribir
+  const readonly = conv.can_reply === false;
+  $('readonly-note').classList.toggle('hidden', !readonly);
+  msgInput.disabled = readonly;
+  sendBtn.disabled = readonly;
+  $('schedule-btn').disabled = readonly;
+
   // Mostrar chat, ocultar bienvenida
   welcomeScreen.style.display = 'none';
   messagesArea.style.display  = 'flex';
@@ -908,6 +923,222 @@ $('contact-save').addEventListener('click', async () => {
 $('contact-cancel').addEventListener('click', closeContactModal);
 $('contact-close').addEventListener('click', closeContactModal);
 $('contact-overlay').addEventListener('click', closeContactModal);
+
+/* ── Banner de navegación (Sprint 2) ─────────────────── */
+function setActiveNav(id) {
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const el = $(id);
+  if (el) el.classList.add('active');
+}
+$('nav-conversaciones').addEventListener('click', () => {
+  closeTasksScreen(); closeEmployeesScreen(); setActiveNav('nav-conversaciones');
+});
+$('nav-tareas').addEventListener('click', () => {
+  closeEmployeesScreen(); openTasksScreen(); setActiveNav('nav-tareas');
+});
+$('nav-empleados').addEventListener('click', () => {
+  closeTasksScreen(); openEmployeesScreen(); setActiveNav('nav-empleados');
+});
+$('nav-contactos').addEventListener('click', () => showToast('La pantalla CONTACTOS llegará en el siguiente sprint 😉'));
+$('nav-configuracion').addEventListener('click', () => showToast('La pantalla CONFIGURACIÓN llegará más adelante 😉'));
+if (localStorage.getItem('chatlink_role') === 'manager') $('nav-empleados').classList.remove('hidden');
+
+/* ── Pantalla EMPLEADOS (Sprint 2, solo GESTOR) ──────── */
+const ROLE_LABELS = { manager: 'Gestor', supervisor: 'Supervisor', employee: 'Empleado' };
+let empState = { employees: [], positions: [], groups: [], editingId: null };
+
+function openEmployeesScreen() { $('employees-screen').classList.remove('hidden'); loadEmployees(); }
+function closeEmployeesScreen() { $('employees-screen').classList.add('hidden'); }
+$('employees-screen-close').addEventListener('click', () => { closeEmployeesScreen(); setActiveNav('nav-conversaciones'); });
+$('employees-add-btn').addEventListener('click', () => openEmpModal(null));
+
+async function loadEmployees() {
+  const [emps, positions, groups] = await Promise.all([
+    apiFetch('/api/employees'),
+    apiFetch('/api/positions'),
+    apiFetch('/api/contact-groups'),
+  ]);
+  if (Array.isArray(emps)) empState.employees = emps;
+  if (Array.isArray(positions)) empState.positions = positions;
+  if (Array.isArray(groups)) empState.groups = groups;
+  renderEmployees();
+}
+
+function renderEmployees() {
+  const tbody = $('employees-table-body');
+  const rowHtml = u => `
+    <tr class="${u.active ? '' : 'emp-inactive'}">
+      <td>${esc((u.last_name ? u.last_name + ', ' : '') + u.first_name)}</td>
+      <td>${esc(u.position_name || '—')}</td>
+      <td>${esc(u.username)}</td>
+      <td><span class="role-badge role-${u.role}">${ROLE_LABELS[u.role] || u.role}</span></td>
+      <td>${u.active ? '🟢 Activo' : '⚪ Inactivo'}</td>
+      <td class="row-actions">
+        <button class="emp-edit-btn" data-id="${u.id}" title="Editar">✏️</button>
+        <button class="emp-key-btn" data-id="${u.id}" title="Resetear contraseña">🔑</button>
+        <button class="emp-toggle-btn" data-id="${u.id}" title="${u.active ? 'Desactivar' : 'Reactivar'}">${u.active ? '🗑️' : '♻️'}</button>
+      </td>
+    </tr>`;
+  tbody.innerHTML = empState.employees.map(rowHtml).join('')
+    || '<tr><td colspan="6" style="text-align:center;color:#999;padding:1.5rem;">Sin empleados aún</td></tr>';
+
+  // Móvil: tarjetas apiladas (D11)
+  $('employees-cards').innerHTML = empState.employees.map(u => `
+    <div class="task-card ${u.active ? '' : 'emp-inactive'}">
+      <div class="tc-top"><strong>${esc((u.last_name ? u.last_name + ', ' : '') + u.first_name)}</strong>
+        <span class="role-badge role-${u.role}">${ROLE_LABELS[u.role] || u.role}</span></div>
+      <div class="tc-meta"><span>${esc(u.position_name || '—')}</span><span>👤 ${esc(u.username)}</span><span>${u.active ? '🟢 Activo' : '⚪ Inactivo'}</span></div>
+      <div class="tc-actions">
+        <button class="emp-edit-btn" data-id="${u.id}">✏️</button>
+        <button class="emp-key-btn" data-id="${u.id}">🔑</button>
+        <button class="emp-toggle-btn" data-id="${u.id}">${u.active ? '🗑️' : '♻️'}</button>
+      </div>
+    </div>`).join('');
+
+  ['employees-table-body', 'employees-cards'].forEach(rootId => {
+    const root = $(rootId);
+    root.querySelectorAll('.emp-edit-btn').forEach(b => b.addEventListener('click', () => openEmpModal(Number(b.dataset.id))));
+    root.querySelectorAll('.emp-key-btn').forEach(b => b.addEventListener('click', () => resetEmployeePassword(Number(b.dataset.id))));
+    root.querySelectorAll('.emp-toggle-btn').forEach(b => b.addEventListener('click', () => toggleEmployeeActive(Number(b.dataset.id))));
+  });
+}
+
+function fillPositionSelect(selectedId) {
+  $('emp-position').innerHTML = '<option value="">— Elegir puesto —</option>' +
+    empState.positions.map(p => `<option value="${p.id}" ${p.id === selectedId ? 'selected' : ''}>${esc(p.name)}</option>`).join('') +
+    '<option value="__new__">➕ Añadir puesto nuevo…</option>';
+}
+$('emp-position').addEventListener('change', () =>
+  $('emp-position-new').classList.toggle('hidden', $('emp-position').value !== '__new__'));
+
+function renderGroupChecks(assigned) {
+  const box = $('emp-groups');
+  if (!empState.groups.length) {
+    box.innerHTML = '<div class="emp-groups-empty">Aún no hay grupos de clientes (se crearán en la pantalla CONTACTOS). De momento el empleado verá las conversaciones sin grupo.</div>';
+    return;
+  }
+  const map = new Map((assigned || []).map(g => [g.group_id, g.can_reply]));
+  box.innerHTML = empState.groups.map(g => {
+    const checked = assigned ? map.has(g.id) : true;   // en el alta: todos marcados (D2)
+    const canReply = assigned ? (map.get(g.id) !== false) : true;
+    return `<label class="emp-group-row">
+      <input type="checkbox" class="emp-group-check" data-id="${g.id}" ${checked ? 'checked' : ''}>
+      <span>${esc(g.name)}</span>
+      <select class="emp-group-mode" data-id="${g.id}">
+        <option value="reply" ${canReply ? 'selected' : ''}>Leer y responder</option>
+        <option value="read" ${!canReply ? 'selected' : ''}>Solo leer</option>
+      </select>
+    </label>`;
+  }).join('');
+}
+
+function collectGroups() {
+  if (!empState.groups.length) return [];
+  return [...document.querySelectorAll('.emp-group-check')].filter(c => c.checked).map(c => ({
+    group_id: Number(c.dataset.id),
+    can_reply: document.querySelector(`.emp-group-mode[data-id="${c.dataset.id}"]`).value === 'reply',
+  }));
+}
+
+function openEmpModal(id) {
+  empState.editingId = id;
+  const u = id ? empState.employees.find(e => e.id === id) : null;
+  $('emp-title').textContent = u ? '✏️ Editar empleado' : '👥 Añadir empleado';
+  $('emp-save').textContent  = u ? 'Guardar cambios' : 'Guardar empleado';
+  $('emp-save').style.display = '';
+  $('emp-first').value = u ? u.first_name : '';
+  $('emp-last').value  = u ? (u.last_name || '') : '';
+  fillPositionSelect(u ? u.position_id : null);
+  $('emp-position-new').classList.add('hidden');
+  $('emp-position-new').value = '';
+  $('emp-role').value = u ? u.role : 'employee';
+  $('emp-username').value = u ? u.username : '';
+  $('emp-username').disabled = !!u;    // el login no se cambia al editar
+  renderGroupChecks(u ? u.groups : null);
+  $('emp-temp-result').classList.add('hidden');
+  $('emp-modal').classList.remove('hidden');
+  $('emp-overlay').classList.remove('hidden');
+  $('emp-first').focus();
+}
+function closeEmpModal() {
+  $('emp-modal').classList.add('hidden');
+  $('emp-overlay').classList.add('hidden');
+  empState.editingId = null;
+}
+
+async function saveEmployee() {
+  const body = {
+    first_name: $('emp-first').value.trim(),
+    last_name:  $('emp-last').value.trim(),
+    role: $('emp-role').value,
+    groups: collectGroups(),
+  };
+  const posVal = $('emp-position').value;
+  if (posVal === '__new__') body.position_name = $('emp-position-new').value.trim();
+  else if (posVal) body.position_id = Number(posVal);
+
+  if (!body.first_name || !body.last_name) { showToast('Nombre y apellidos son obligatorios'); return; }
+  if (!body.position_id && !body.position_name) { showToast('Elige un puesto o crea uno nuevo'); return; }
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer ' + localStorage.getItem('chatlink_token'),
+  };
+
+  if (empState.editingId) {
+    const res = await fetch(`/api/employees/${empState.editingId}`, { method: 'PUT', headers, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.error || 'No se pudo guardar'); return; }
+    closeEmpModal();
+    await loadEmployees(); await loadUsers();
+    showToast('Empleado actualizado ✓');
+  } else {
+    body.username = $('emp-username').value.trim();
+    if (!body.username) { showToast('El usuario (login) es obligatorio'); return; }
+    const res = await fetch('/api/employees', { method: 'POST', headers, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.error || 'No se pudo crear el empleado'); return; }
+    // Mostrar la contraseña temporal UNA sola vez
+    $('emp-temp-result').innerHTML =
+      `✅ Empleado creado.<br>Usuario: <code>${esc(data.username)}</code> — Contraseña temporal: <code>${esc(data.temp_password)}</code>` +
+      `<br><small>Cópiala y dásela al empleado: la cambiará obligatoriamente en su primer acceso. No se volverá a mostrar.</small>`;
+    $('emp-temp-result').classList.remove('hidden');
+    $('emp-save').style.display = 'none';
+    await loadEmployees(); await loadUsers();
+  }
+}
+
+async function toggleEmployeeActive(id) {
+  const u = empState.employees.find(e => e.id === id);
+  if (!u) return;
+  const q = u.active
+    ? `¿Desactivar a ${u.first_name} ${u.last_name || ''}? No podrá entrar en ChatLink (podrás reactivarlo).`
+    : `¿Reactivar a ${u.first_name} ${u.last_name || ''}?`;
+  if (!confirm(q)) return;
+  const res = await fetch(`/api/employees/${id}/active`, {
+    method: 'PATCH',
+    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('chatlink_token') },
+  });
+  const data = await res.json();
+  if (!res.ok) { showToast(data.error || 'No se pudo cambiar el estado'); return; }
+  await loadEmployees(); await loadUsers();
+  showToast(data.active ? 'Empleado reactivado ♻️' : 'Empleado desactivado');
+}
+
+async function resetEmployeePassword(id) {
+  const u = empState.employees.find(e => e.id === id);
+  if (!u) return;
+  if (!confirm(`¿Generar una contraseña temporal nueva para ${u.first_name}? La actual dejará de valer.`)) return;
+  const r = await apiFetch(`/api/employees/${id}/reset-password`, { method: 'POST' });
+  if (r && r.temp_password) {
+    prompt(`Contraseña temporal de ${u.first_name} (cópiala; no se mostrará de nuevo):`, r.temp_password);
+  } else showToast('No se pudo resetear la contraseña');
+}
+
+$('emp-save').addEventListener('click', saveEmployee);
+$('emp-cancel').addEventListener('click', closeEmpModal);
+$('emp-close').addEventListener('click', closeEmpModal);
+$('emp-overlay').addEventListener('click', closeEmpModal);
 
 /* ── Canal Telegram (configuración, solo GESTOR) ────── */
 async function initTelegramPanel() {
