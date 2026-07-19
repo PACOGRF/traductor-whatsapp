@@ -443,7 +443,7 @@ function renderAlerts() {
     return `
       <div class="alert-item" data-conv="${a.conversation_id || ''}">
         <span class="al-client">${a.high_priority ? '🔴 ' : ''}${esc(a.client)}</span>
-        <span class="al-late">· ${a.type === 'due' ? '📅 límite' : '⏰ aviso'} hace ${late}</span>
+        <span class="al-late">· ${a.type === 'due' ? '📅 límite' : a.type === 'unanswered' ? '⚠️ sin responder' : '⏰ aviso'} hace ${late}</span>
         <div class="al-text">${esc(truncate(a.text || '', 70))}</div>
       </div>`;
   }).join('');

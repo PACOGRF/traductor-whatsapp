@@ -345,6 +345,27 @@ router.get('/alerts', async (req, res) => {
           client, text: t.message_text, when: t.due_at, high_priority: t.high_priority });
       }
     }
+    // Conversaciones sin responder (mismo umbral que el cron y el badge ⚠️)
+    const company = await db.get('SELECT alert_hours FROM companies WHERE id = 1');
+    const alertHours = (company && company.alert_hours) || 4;
+    const convs = await db.all(`
+      SELECT c.id, c.guest_name, c.guest_phone, ct.name AS contact_name,
+        (SELECT m.created_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message_at,
+        (SELECT m.direction FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_direction
+      FROM conversations c
+      LEFT JOIN contacts ct ON ct.id = c.contact_id
+    `);
+    for (const c of convs) {
+      if (c.last_direction !== 'incoming' || !c.last_message_at) continue;
+      const hours = (now - new Date(c.last_message_at).getTime()) / 3600000;
+      if (hours < alertHours) continue;
+      alerts.push({
+        type: 'unanswered', task_id: null, conversation_id: c.id,
+        client: c.contact_name || c.guest_name || c.guest_phone,
+        text: 'Cliente esperando respuesta', when: c.last_message_at, high_priority: false,
+      });
+    }
+
     alerts.sort((a, b) => new Date(a.when) - new Date(b.when));
     res.json(alerts);
   } catch (err) { res.status(500).json({ error: err.message }); }
