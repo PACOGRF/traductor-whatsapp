@@ -1255,3 +1255,6 @@ body {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .msg-doc:hover { background: rgba(0,0,0,0.12); }
+
+/* Clip profesional (SVG) en el botón de adjuntar */
+#attach-btn svg { width: 20px; height: 20px; display: block; }
