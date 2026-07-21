@@ -202,18 +202,25 @@ function renderConvList() {
   }
 
   convList.innerHTML = state.conversations.map(c => {
-    const initials = (c.guest_name || c.guest_phone || '?')[0].toUpperCase();
+    const isInternal = c.channel === 'internal';
+    const initials   = isInternal
+      ? String(c.member_count || '?')
+      : (c.guest_name || c.guest_phone || '?')[0].toUpperCase();
+    const displayName = isInternal
+      ? (c.internal_name || 'Chat interno')
+      : (c.contact_name || c.guest_name || c.guest_phone);
     const preview  = c.last_message ? truncate(c.last_message, 40) : 'Sin mensajes';
     const time     = c.last_message_at ? formatTime(c.last_message_at) : '';
     const active   = c.id === state.activeConvId ? 'active' : '';
     return `
-      <div class="conv-item ${active}" data-id="${c.id}" data-name="${esc(c.contact_name || c.guest_name || '')}" data-phone="${esc(c.guest_phone || '')}">
-        <div class="conv-avatar">${initials}</div>
+      <div class="conv-item ${active}" data-id="${c.id}" data-name="${esc(displayName)}" data-phone="${esc(c.guest_phone || '')}">
+        <div class="conv-avatar${isInternal ? ' conv-avatar-internal' : ''}">${isInternal ? IC.users : initials}</div>
         <div class="conv-info">
           <div class="conv-name">
-            ${c.channel === 'telegram' ? `<span class="conv-channel" title="Telegram">${IC.telegram}</span>` : ''}${esc(c.contact_name || c.guest_name || c.guest_phone)}
-            ${c.unanswered_hours ? `<span class="conv-unanswered" title="Sin responder">${IC.warn} ${c.unanswered_hours}h</span>` : ''}
-            ${c.guest_language && c.guest_language !== 'es' ? `<span class="conv-lang">${langName(c.guest_language)}</span>` : ''}
+            ${!isInternal && c.channel === 'telegram' ? `<span class="conv-channel" title="Telegram">${IC.telegram}</span>` : ''}${esc(displayName)}
+            ${!isInternal && c.unanswered_hours ? `<span class="conv-unanswered" title="Sin responder">${IC.warn} ${c.unanswered_hours}h</span>` : ''}
+            ${!isInternal && c.guest_language && c.guest_language !== 'es' ? `<span class="conv-lang">${langName(c.guest_language)}</span>` : ''}
+            ${isInternal ? `<span class="conv-lang" title="Chat interno">${c.member_count || ''} miembros</span>` : ''}
           </div>
           <div class="conv-preview">${esc(preview)}</div>
         </div>

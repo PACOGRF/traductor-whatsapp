@@ -20,6 +20,7 @@ router.get('/conversations', async (req, res) => {
     const rows = await db.all(`
       SELECT c.*, ct.name AS contact_name, ct.phone AS contact_phone, ct.group_id AS contact_group_id,
         cp.user_id AS is_member,
+        (SELECT COUNT(*) FROM conversation_participants WHERE conversation_id = c.id) AS member_count,
         (SELECT m.translated_text FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message,
         (SELECT m.created_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message_at,
         (SELECT m.direction FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_direction

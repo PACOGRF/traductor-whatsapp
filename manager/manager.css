@@ -100,6 +100,11 @@ body {
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
+.conv-avatar-internal {
+  background: #3b82f6;
+  font-size: 0.75rem;
+}
+.conv-avatar-internal svg { width: 20px; height: 20px; }
 
 .conv-info { flex: 1; min-width: 0; }
 .conv-name { font-weight: 600; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
