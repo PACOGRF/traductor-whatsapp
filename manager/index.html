@@ -16,7 +16,7 @@
 <!-- ── Banner superior de navegación (Sprint 2) ── -->
 <nav id="top-banner">
   <button class="nav-btn active" id="nav-conversaciones">CONVERSACIONES</button>
-  <button class="nav-btn nav-soon" id="nav-contactos" title="Se activa en el Sprint 3">CONTACTOS</button>
+  <button class="nav-btn" id="nav-contactos">CONTACTOS</button>
   <button class="nav-btn hidden" id="nav-empleados">EMPLEADOS</button>
   <button class="nav-btn" id="nav-tareas">TAREAS</button>
   <button class="nav-btn nav-soon" id="nav-configuracion" title="Se activa en el Sprint 6">CONFIGURACIÓN</button>
@@ -28,7 +28,18 @@
   <aside id="sidebar">
     <div id="sidebar-header">
       <span class="sidebar-title">Listado de chats</span>
-      <button id="tasks-mobile-btn" class="tasks-mobile-btn">📌 Tareas</button>
+      <div class="sidebar-header-actions">
+        <button id="conv-search-btn" title="Buscar conversación">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
+        <button id="conv-new-btn" title="Iniciar nueva conversación">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <button id="tasks-mobile-btn" class="tasks-mobile-btn">📌 Tareas</button>
+      </div>
+    </div>
+    <div id="conv-search-bar" class="hidden">
+      <input id="conv-search-input" type="search" placeholder="Buscar por nombre, teléfono o texto…" autocomplete="off">
     </div>
     <div id="conv-list">
       <div class="conv-empty">
@@ -216,6 +227,100 @@
     <div class="task-actions">
       <button id="task-cancel" class="btn-secondary">Cancelar</button>
       <button id="task-save" class="btn-primary">Guardar tarea</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pantalla CONTACTOS (Sprint 3) -->
+<div id="contacts-screen" class="hidden">
+  <div id="contacts-screen-header">
+    <span>👥 CONTACTOS</span>
+    <div>
+      <input id="contacts-search" type="search" placeholder="Buscar contacto…" autocomplete="off">
+      <button id="contacts-add-btn">+ Nuevo contacto</button>
+      <button id="contacts-screen-close">✕</button>
+    </div>
+  </div>
+  <div id="contacts-groups-bar">
+    <button class="cg-filter active" data-group="">Todos</button>
+  </div>
+  <div id="contacts-table-wrap">
+    <table id="contacts-table">
+      <thead>
+        <tr><th>Nombre</th><th>Teléfono</th><th>Empresa</th><th>Grupo</th><th>Idioma</th><th></th></tr>
+      </thead>
+      <tbody id="contacts-table-body"></tbody>
+    </table>
+    <div id="contacts-cards"></div>
+  </div>
+</div>
+
+<!-- Modal: editar / crear contacto -->
+<div id="ct-overlay" class="hidden"></div>
+<div id="ct-modal" class="hidden">
+  <div id="ct-header">
+    <span id="ct-title">👤 Nuevo contacto</span>
+    <button id="ct-close">✕</button>
+  </div>
+  <div id="ct-body">
+    <label for="ct-name">Nombre*</label>
+    <input id="ct-name" type="text" placeholder="Nombre completo">
+
+    <label for="ct-phone">Teléfono</label>
+    <input id="ct-phone" type="tel" placeholder="+34600…">
+
+    <label for="ct-company">Empresa / alojamiento</label>
+    <input id="ct-company" type="text" placeholder="Hotel, apartamento…">
+
+    <label for="ct-group">Grupo de clientes</label>
+    <select id="ct-group"></select>
+    <input id="ct-group-new" type="text" class="hidden" placeholder="Nombre del grupo nuevo">
+
+    <label for="ct-lang">Idioma preferido</label>
+    <select id="ct-lang">
+      <option value="">Auto-detectar</option>
+      <option value="es">Español</option>
+      <option value="en">Inglés</option>
+      <option value="fr">Francés</option>
+      <option value="de">Alemán</option>
+      <option value="it">Italiano</option>
+      <option value="pt">Portugués</option>
+      <option value="nl">Neerlandés</option>
+      <option value="ru">Ruso</option>
+      <option value="zh">Chino</option>
+      <option value="ja">Japonés</option>
+      <option value="ar">Árabe</option>
+      <option value="pl">Polaco</option>
+      <option value="ro">Rumano</option>
+      <option value="tr">Turco</option>
+      <option value="mg">Malgache</option>
+    </select>
+
+    <label for="ct-notes">Notas permanentes</label>
+    <textarea id="ct-notes" rows="3" placeholder="Información relevante del cliente…"></textarea>
+
+    <div class="ct-actions">
+      <button id="ct-cancel" class="btn-secondary">Cancelar</button>
+      <button id="ct-save" class="btn-primary">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: iniciar nueva conversación (➕) -->
+<div id="newconv-overlay" class="hidden"></div>
+<div id="newconv-modal" class="hidden">
+  <div id="newconv-header">
+    <span>➕ Nueva conversación</span>
+    <button id="newconv-close">✕</button>
+  </div>
+  <div id="newconv-body">
+    <p id="newconv-intro">Elige un contacto existente o crea uno nuevo para enviarle el enlace de invitación de Telegram.</p>
+    <input id="newconv-search" type="search" placeholder="Buscar contacto…" autocomplete="off">
+    <div id="newconv-list"></div>
+    <div id="newconv-result" class="hidden"></div>
+    <div class="ct-actions">
+      <button id="newconv-new-contact" class="btn-secondary">+ Crear contacto nuevo</button>
+      <button id="newconv-close2" class="btn-secondary">Cerrar</button>
     </div>
   </div>
 </div>

@@ -1258,3 +1258,152 @@ body {
 
 /* Clip profesional (SVG) en el botón de adjuntar */
 #attach-btn svg { width: 20px; height: 20px; display: block; }
+
+/* ═══════════ SPRINT 3: CONTACTOS ═══════════ */
+
+/* Botones de lupa y ➕ en la cabecera del sidebar */
+.sidebar-header-actions { display: flex; align-items: center; gap: 4px; }
+#conv-search-btn, #conv-new-btn {
+  background: rgba(255,255,255,0.15); border: none; border-radius: 50%;
+  width: 30px; height: 30px; cursor: pointer; color: white;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+#conv-search-btn:hover, #conv-new-btn:hover { background: rgba(255,255,255,0.3); }
+#conv-search-btn svg, #conv-new-btn svg { width: 16px; height: 16px; }
+
+/* Barra de búsqueda en el sidebar */
+#conv-search-bar { background: var(--green-dark); padding: 0 0.6rem 0.5rem; flex-shrink: 0; }
+#conv-search-bar.hidden { display: none; }
+#conv-search-input {
+  width: 100%; border: none; border-radius: 18px; padding: 7px 12px;
+  font-size: 0.85rem; outline: none; background: rgba(255,255,255,0.92); color: #333;
+}
+.conv-item.search-hidden { display: none; }
+
+/* Pantalla CONTACTOS */
+#contacts-screen { position: fixed; inset: 0; top: 33px; background: #f2f2f2; z-index: 380; display: flex; flex-direction: column; color: #333; }
+#contacts-screen.hidden { display: none; }
+#contacts-screen-header {
+  background: var(--green-dark); color: white; min-height: var(--header-h);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 1rem; font-weight: 700; flex-shrink: 0; gap: 0.5rem;
+}
+#contacts-screen-header > div { display: flex; align-items: center; gap: 0.5rem; }
+#contacts-search {
+  border: none; border-radius: 16px; padding: 5px 12px; font-size: 0.82rem;
+  background: rgba(255,255,255,0.2); color: white; outline: none; width: 180px;
+}
+#contacts-search::placeholder { color: rgba(255,255,255,0.6); }
+#contacts-search:focus { background: rgba(255,255,255,0.3); }
+#contacts-add-btn {
+  background: var(--green-light); color: white; border: none; border-radius: 8px;
+  padding: 6px 12px; font-size: 0.82rem; font-weight: 700; cursor: pointer;
+}
+#contacts-add-btn:hover { background: var(--green-mid); }
+#contacts-screen-close { background: none; border: none; color: white; font-size: 1.15rem; cursor: pointer; }
+
+/* Filtro por grupos */
+#contacts-groups-bar {
+  background: white; border-bottom: 1px solid #eee;
+  padding: 6px 1rem; display: flex; gap: 6px; overflow-x: auto; flex-shrink: 0;
+}
+.cg-filter {
+  background: #eee; border: none; border-radius: 14px; padding: 4px 12px;
+  font-size: 0.78rem; cursor: pointer; white-space: nowrap; color: #555;
+}
+.cg-filter.active { background: var(--green-dark); color: white; }
+
+/* Tabla de contactos */
+#contacts-table-wrap { flex: 1; overflow: auto; padding: 0.75rem 1rem; }
+#contacts-table { width: 100%; border-collapse: collapse; background: white; font-size: 0.85rem; border-radius: 8px; overflow: hidden; }
+#contacts-table th {
+  background: var(--green-dark); color: white; text-align: left;
+  padding: 8px 10px; font-size: 0.74rem; letter-spacing: 0.04em; position: sticky; top: 0;
+}
+#contacts-table td { padding: 8px 10px; border-bottom: 1px solid #eee; }
+#contacts-table tr:hover td { background: #f7fbf9; }
+#contacts-table .row-actions button { background: none; border: none; cursor: pointer; font-size: 0.9rem; padding: 2px 4px; }
+.ct-group-badge {
+  font-size: 0.7rem; background: var(--green-light); color: white;
+  border-radius: 10px; padding: 2px 8px; white-space: nowrap;
+}
+#contacts-cards { display: none; }
+
+/* Modal de contacto */
+#ct-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 400; }
+#ct-overlay.hidden { display: none; }
+#ct-modal {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(440px, calc(100vw - 2rem)); max-height: 90vh; overflow-y: auto;
+  background: white; border-radius: 12px; z-index: 401; color: #333;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+}
+#ct-modal.hidden { display: none; }
+#ct-header {
+  background: var(--green-dark); color: white; padding: 0 1rem;
+  height: var(--header-h); display: flex; align-items: center; justify-content: space-between;
+  font-weight: 600; position: sticky; top: 0;
+}
+#ct-close { background: none; border: none; color: white; font-size: 1.1rem; cursor: pointer; }
+#ct-body { padding: 1rem; display: flex; flex-direction: column; gap: 0.4rem; }
+#ct-body label { font-size: 0.8rem; font-weight: 600; color: #444; }
+#ct-body input, #ct-body select, #ct-body textarea {
+  width: 100%; border: 1.5px solid #ddd; border-radius: 8px;
+  padding: 8px 10px; font-size: 0.88rem; font-family: inherit; outline: none;
+}
+#ct-body input:focus, #ct-body select:focus, #ct-body textarea:focus { border-color: var(--green-mid); }
+#ct-group-new.hidden { display: none; }
+.ct-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.6rem; }
+.ct-actions .btn-secondary {
+  background: none; border: 1px solid #ccc; border-radius: 8px;
+  padding: 8px 14px; font-size: 0.85rem; cursor: pointer; color: #555;
+}
+.ct-actions .btn-primary {
+  background: var(--green-dark); color: white; border: none; border-radius: 8px;
+  padding: 8px 16px; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+}
+.ct-actions .btn-primary:hover { background: var(--green-mid); }
+
+/* Modal: nueva conversación ➕ */
+#newconv-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 400; }
+#newconv-overlay.hidden { display: none; }
+#newconv-modal {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(420px, calc(100vw - 2rem)); max-height: 80vh; overflow-y: auto;
+  background: white; border-radius: 12px; z-index: 401; color: #333;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+}
+#newconv-modal.hidden { display: none; }
+#newconv-header {
+  background: var(--green-dark); color: white; padding: 0 1rem;
+  height: var(--header-h); display: flex; align-items: center; justify-content: space-between;
+  font-weight: 600;
+}
+#newconv-close { background: none; border: none; color: white; font-size: 1.1rem; cursor: pointer; }
+#newconv-body { padding: 1rem; display: flex; flex-direction: column; gap: 0.6rem; }
+#newconv-intro { font-size: 0.85rem; color: #666; }
+#newconv-search {
+  width: 100%; border: 1.5px solid #ddd; border-radius: 8px;
+  padding: 8px 10px; font-size: 0.88rem; font-family: inherit; outline: none;
+}
+#newconv-search:focus { border-color: var(--green-mid); }
+#newconv-list { max-height: 200px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; }
+.newconv-item {
+  padding: 9px 12px; cursor: pointer; font-size: 0.88rem; display: flex;
+  flex-direction: column; gap: 2px; border-bottom: 1px solid #f5f5f5;
+}
+.newconv-item:hover { background: #f0faf5; }
+.newconv-item-name { font-weight: 600; color: #333; }
+.newconv-item-sub { font-size: 0.75rem; color: #888; }
+#newconv-result {
+  background: #e8f5e9; border: 1.5px solid #43a047; border-radius: 8px;
+  padding: 10px 12px; font-size: 0.85rem; color: #1b5e20;
+}
+#newconv-result.hidden { display: none; }
+#newconv-result a { color: #075e54; font-weight: 600; word-break: break-all; }
+
+/* Móvil: tabla de contactos → tarjetas */
+@media (max-width: 768px) {
+  #contacts-table { display: none; }
+  #contacts-cards { display: block; }
+}

@@ -193,7 +193,7 @@ function renderConvList() {
     const time     = c.last_message_at ? formatTime(c.last_message_at) : '';
     const active   = c.id === state.activeConvId ? 'active' : '';
     return `
-      <div class="conv-item ${active}" data-id="${c.id}">
+      <div class="conv-item ${active}" data-id="${c.id}" data-name="${esc(c.contact_name || c.guest_name || '')}" data-phone="${esc(c.guest_phone || '')}">
         <div class="conv-avatar">${initials}</div>
         <div class="conv-info">
           <div class="conv-name">
@@ -996,15 +996,17 @@ function setActiveNav(id) {
   if (el) el.classList.add('active');
 }
 $('nav-conversaciones').addEventListener('click', () => {
-  closeTasksScreen(); closeEmployeesScreen(); setActiveNav('nav-conversaciones');
+  closeTasksScreen(); closeEmployeesScreen(); closeContactsScreen(); setActiveNav('nav-conversaciones');
 });
 $('nav-tareas').addEventListener('click', () => {
-  closeEmployeesScreen(); openTasksScreen(); setActiveNav('nav-tareas');
+  closeEmployeesScreen(); closeContactsScreen(); openTasksScreen(); setActiveNav('nav-tareas');
 });
 $('nav-empleados').addEventListener('click', () => {
-  closeTasksScreen(); openEmployeesScreen(); setActiveNav('nav-empleados');
+  closeTasksScreen(); closeContactsScreen(); openEmployeesScreen(); setActiveNav('nav-empleados');
 });
-$('nav-contactos').addEventListener('click', () => showToast('La pantalla CONTACTOS llegará en el siguiente sprint 😉'));
+$('nav-contactos').addEventListener('click', () => {
+  closeTasksScreen(); closeEmployeesScreen(); openContactsScreen(); setActiveNav('nav-contactos');
+});
 $('nav-configuracion').addEventListener('click', () => showToast('La pantalla CONFIGURACIÓN llegará más adelante 😉'));
 if (localStorage.getItem('chatlink_role') === 'manager') $('nav-empleados').classList.remove('hidden');
 
@@ -1459,3 +1461,306 @@ init();
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') loadTasks();
 });
+
+/* ═══════════ SPRINT 3: CONTACTOS ═══════════ */
+
+let ctState = { contacts: [], groups: [], filterGroupId: null, editingId: null };
+
+function openContactsScreen() {
+  $('contacts-screen').classList.remove('hidden');
+  loadContacts();
+}
+function closeContactsScreen() {
+  $('contacts-screen').classList.add('hidden');
+}
+
+async function loadContacts() {
+  const [contacts, groups] = await Promise.all([
+    apiFetch('/api/contacts'),
+    apiFetch('/api/contact-groups'),
+  ]);
+  if (Array.isArray(contacts)) ctState.contacts = contacts;
+  if (Array.isArray(groups)) ctState.groups = groups;
+  renderContactsGroupsBar();
+  renderContacts();
+}
+
+function renderContactsGroupsBar() {
+  const bar = $('contacts-groups-bar');
+  const allActive = ctState.filterGroupId === null;
+  let html = '<button class="cg-filter ' + (allActive ? 'active' : '') + '" data-gid="">Todos</button>';
+  ctState.groups.forEach(g => {
+    html += '<button class="cg-filter ' + (ctState.filterGroupId === g.id ? 'active' : '') + '" data-gid="' + g.id + '">' + esc(g.name) + '</button>';
+  });
+  bar.innerHTML = html;
+  bar.querySelectorAll('.cg-filter').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const gid = btn.dataset.gid;
+      ctState.filterGroupId = gid ? Number(gid) : null;
+      renderContactsGroupsBar();
+      renderContacts();
+    });
+  });
+}
+
+function renderContacts() {
+  const q = ($('contacts-search').value || '').toLowerCase().trim();
+  let list = ctState.contacts;
+  if (ctState.filterGroupId !== null) {
+    list = list.filter(c => c.group_id === ctState.filterGroupId);
+  }
+  if (q) {
+    list = list.filter(c =>
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.phone || '').toLowerCase().includes(q) ||
+      (c.company_name || '').toLowerCase().includes(q)
+    );
+  }
+  const tbody = $('contacts-table-body');
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;padding:2rem">Sin resultados</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(c =>
+    '<tr>' +
+    '<td>' + esc(c.name || '—') + '</td>' +
+    '<td>' + esc(c.phone || '—') + '</td>' +
+    '<td>' + esc(c.company_name || '—') + '</td>' +
+    '<td>' + (c.group_name ? '<span class="ct-group-badge">' + esc(c.group_name) + '</span>' : '—') + '</td>' +
+    '<td>' + esc(c.preferred_language || '—') + '</td>' +
+    '<td class="row-actions">' +
+      '<button title="Editar" onclick="openCtModal(' + c.id + ')">✏️</button>' +
+      '<button title="Nueva conv." onclick="openNewConvModal(' + c.id + ')">💬</button>' +
+      '<button title="Eliminar" onclick="deleteContact(' + c.id + ')">🗑️</button>' +
+    '</td>' +
+    '</tr>'
+  ).join('');
+}
+
+/* ── Modal editar/crear contacto ─────────── */
+function openCtModal(id) {
+  ctState.editingId = id || null;
+  const isNew = !id;
+  $('ct-title').textContent = isNew ? '👤 Nuevo contacto' : '✏️ Editar contacto';
+  const c = isNew ? {} : (ctState.contacts.find(x => x.id === id) || {});
+  $('ct-name').value = c.name || '';
+  $('ct-phone').value = c.phone || '';
+  $('ct-company').value = c.company_name || '';
+  $('ct-notes').value = c.permanent_notes || '';
+  const gsel = $('ct-group');
+  let ghtml = '<option value="">Sin grupo</option>';
+  ctState.groups.forEach(g => {
+    ghtml += '<option value="' + g.id + '"' + (c.group_id === g.id ? ' selected' : '') + '>' + esc(g.name) + '</option>';
+  });
+  ghtml += '<option value="_new">+ A\xF1adir grupo nuevo…</option>';
+  gsel.innerHTML = ghtml;
+  $('ct-group-new').classList.add('hidden');
+  $('ct-group-new').value = '';
+  $('ct-lang').value = c.preferred_language || '';
+  $('ct-overlay').classList.remove('hidden');
+  $('ct-modal').classList.remove('hidden');
+  $('ct-name').focus();
+}
+
+function closeCtModal() {
+  $('ct-overlay').classList.add('hidden');
+  $('ct-modal').classList.add('hidden');
+  ctState.editingId = null;
+}
+
+$('ct-close').addEventListener('click', closeCtModal);
+$('ct-cancel').addEventListener('click', closeCtModal);
+$('ct-overlay').addEventListener('click', closeCtModal);
+
+$('ct-group').addEventListener('change', () => {
+  const newInput = $('ct-group-new');
+  if ($('ct-group').value === '_new') {
+    newInput.classList.remove('hidden');
+    newInput.focus();
+  } else {
+    newInput.classList.add('hidden');
+    newInput.value = '';
+  }
+});
+
+async function saveContact() {
+  const name = $('ct-name').value.trim();
+  if (!name) { showToast('El nombre es obligatorio'); return; }
+  const gsel = $('ct-group');
+  const groupNewVal = $('ct-group-new').value.trim();
+  const body = {
+    name,
+    phone: $('ct-phone').value.trim() || null,
+    company_name: $('ct-company').value.trim() || null,
+    preferred_language: $('ct-lang').value || null,
+    permanent_notes: $('ct-notes').value.trim() || null,
+  };
+  if (gsel.value === '_new' && groupNewVal) {
+    body.group_name = groupNewVal;
+  } else if (gsel.value && gsel.value !== '_new') {
+    body.group_id = Number(gsel.value);
+  } else {
+    body.group_id = null;
+  }
+  try {
+    const jsonHeaders = { 'Content-Type': 'application/json' };
+    if (ctState.editingId) {
+      await apiFetch('/api/contacts/' + ctState.editingId, { method: 'PUT', headers: jsonHeaders, body: JSON.stringify(body) });
+    } else {
+      // POST crea el contacto (sin grupo); si hay grupo se aplica con PUT
+      const hasGroup = body.group_id || body.group_name;
+      const createBody = { name: body.name, phone: body.phone, company_name: body.company_name, permanent_notes: body.permanent_notes };
+      const created = await apiFetch('/api/contacts', { method: 'POST', headers: jsonHeaders, body: JSON.stringify(createBody) });
+      if (created && created.id && hasGroup) {
+        await apiFetch('/api/contacts/' + created.id, { method: 'PUT', headers: jsonHeaders, body: JSON.stringify(body) });
+      }
+    }
+    closeCtModal();
+    await loadContacts();
+    showToast('Contacto guardado');
+  } catch (err) {
+    showToast('Error: ' + (err.message || 'no se pudo guardar'));
+  }
+}
+
+$('ct-save').addEventListener('click', saveContact);
+
+async function deleteContact(id) {
+  const c = ctState.contacts.find(x => x.id === id);
+  if (!confirm('Eliminar a ' + (c ? c.name : 'este contacto') + '?')) return;
+  try {
+    await apiFetch('/api/contacts/' + id, { method: 'DELETE' });
+    await loadContacts();
+    showToast('Contacto eliminado');
+  } catch (err) {
+    showToast('Error: ' + (err.message || 'no se pudo eliminar'));
+  }
+}
+
+$('contacts-add-btn').addEventListener('click', () => openCtModal(null));
+$('contacts-screen-close').addEventListener('click', () => { closeContactsScreen(); setActiveNav('nav-conversaciones'); });
+$('contacts-search').addEventListener('input', renderContacts);
+
+/* ── Modal nueva conversacion ─────────── */
+function openNewConvModal(preselectedId) {
+  $('newconv-search').value = '';
+  $('newconv-result').classList.add('hidden');
+  $('newconv-result').innerHTML = '';
+  if (ctState.contacts.length === 0) loadContacts().then(() => renderNewConvList(''));
+  else renderNewConvList('');
+  $('newconv-overlay').classList.remove('hidden');
+  $('newconv-modal').classList.remove('hidden');
+  if (preselectedId) {
+    startConversation(preselectedId);
+  } else {
+    $('newconv-search').focus();
+  }
+}
+
+function closeNewConvModal() {
+  $('newconv-overlay').classList.add('hidden');
+  $('newconv-modal').classList.add('hidden');
+}
+
+$('newconv-close').addEventListener('click', closeNewConvModal);
+$('newconv-close2').addEventListener('click', closeNewConvModal);
+$('newconv-overlay').addEventListener('click', closeNewConvModal);
+
+function renderNewConvList(q) {
+  const lower = q.toLowerCase().trim();
+  const list = ctState.contacts.filter(c =>
+    !lower || (c.name || '').toLowerCase().includes(lower) || (c.phone || '').includes(lower)
+  ).slice(0, 30);
+  const ul = $('newconv-list');
+  if (!list.length) {
+    ul.innerHTML = '<div style="padding:10px 12px;color:#999;font-size:0.82rem">Sin contactos</div>';
+    return;
+  }
+  ul.innerHTML = list.map(c =>
+    '<div class="newconv-item" data-cid="' + c.id + '">' +
+    '<span class="newconv-item-name">' + esc(c.name || '—') + '</span>' +
+    '<span class="newconv-item-sub">' + esc(c.phone || '') + (c.company_name ? ' \xB7 ' + esc(c.company_name) : '') + '</span>' +
+    '</div>'
+  ).join('');
+  ul.querySelectorAll('.newconv-item').forEach(el => {
+    el.addEventListener('click', () => startConversation(Number(el.dataset.cid)));
+  });
+}
+
+$('newconv-search').addEventListener('input', () => renderNewConvList($('newconv-search').value));
+
+async function startConversation(contactId) {
+  try {
+    const res = await apiFetch('/api/conversations/start', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact_id: contactId }),
+    });
+    const resultEl = $('newconv-result');
+    resultEl.classList.remove('hidden');
+    if (res.conversation_id) {
+      resultEl.innerHTML = 'Conversaci\xF3n existente encontrada. <a href="#" id="newconv-open-link">Abrir chat →</a>';
+      $('newconv-open-link').addEventListener('click', e => {
+        e.preventDefault();
+        closeNewConvModal();
+        closeContactsScreen();
+        setActiveNav('nav-conversaciones');
+        selectConversation(res.conversation_id);
+      });
+    } else if (res.invite_link) {
+      const contact = ctState.contacts.find(c => c.id === contactId);
+      resultEl.innerHTML = 'Comparte este enlace con ' + esc(contact ? contact.name : 'el contacto') + ':<br>' +
+        '<a href="' + res.invite_link + '" target="_blank" rel="noopener">' + res.invite_link + '</a>';
+    } else {
+      resultEl.innerHTML = '<span style="color:#c62828">' + esc(res.reason || 'No se pudo iniciar la conversaci\xF3n') + '</span>';
+    }
+  } catch (err) {
+    showToast('Error: ' + (err.message || 'no se pudo iniciar la conversaci\xF3n'));
+  }
+}
+
+$('newconv-new-contact').addEventListener('click', () => {
+  closeNewConvModal();
+  openCtModal(null);
+});
+
+$('conv-new-btn').addEventListener('click', () => {
+  if (ctState.contacts.length === 0) loadContacts().then(() => openNewConvModal());
+  else openNewConvModal();
+});
+
+/* ── Buscador en sidebar ────────────────── */
+$('conv-search-btn').addEventListener('click', () => {
+  const bar = $('conv-search-bar');
+  bar.classList.toggle('hidden');
+  if (!bar.classList.contains('hidden')) {
+    $('conv-search-input').value = '';
+    $('conv-search-input').focus();
+    filterConvList('');
+  } else {
+    filterConvList('');
+  }
+});
+
+$('conv-search-input').addEventListener('input', () => filterConvList($('conv-search-input').value));
+
+function filterConvList(q) {
+  const lower = q.toLowerCase().trim();
+  document.querySelectorAll('.conv-item').forEach(el => {
+    if (!lower) { el.classList.remove('search-hidden'); return; }
+    const name = (el.dataset.name || '').toLowerCase();
+    const phone = (el.dataset.phone || '').toLowerCase();
+    el.classList.toggle('search-hidden', !name.includes(lower) && !phone.includes(lower));
+  });
+  if (lower) searchConvMessages(lower);
+}
+
+async function searchConvMessages(q) {
+  try {
+    const ids = await apiFetch('/api/conversations-search?q=' + encodeURIComponent(q));
+    if (!Array.isArray(ids)) return;
+    const matchIds = new Set(ids);
+    document.querySelectorAll('.conv-item').forEach(el => {
+      if (matchIds.has(Number(el.dataset.id))) el.classList.remove('search-hidden');
+    });
+  } catch (_) {}
+}
+
