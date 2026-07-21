@@ -1529,6 +1529,8 @@ body {
   background: rgba(0,0,0,0.45);
   z-index: 1100;
 }
+#intconv-overlay.hidden { display: none; }
+#intconv-modal.hidden   { display: none; }
 #intconv-modal {
   position: fixed;
   top: 50%; left: 50%;
