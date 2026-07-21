@@ -77,12 +77,16 @@ router.get('/conversations/:id/messages', async (req, res) => {
       if (access === 'none') return res.status(403).json({ error: 'Sin acceso a esta conversación' });
     }
 
+    const myId = req.user?.user_id || null;
     const rows = await db.all(
-      `SELECT m.*, u.first_name AS sender_first_name, u.last_name AS sender_last_name
+      `SELECT m.*,
+              u.first_name AS sender_first_name, u.last_name AS sender_last_name,
+              (SELECT COUNT(*) FROM message_acks WHERE message_id = m.id) AS ack_count,
+              (SELECT acked_at FROM message_acks WHERE message_id = m.id AND user_id = ?) AS acked_by_me
        FROM messages m
        LEFT JOIN users u ON u.id = m.sender_user_id
        WHERE m.conversation_id = ? ORDER BY m.created_at ASC`,
-      [req.params.id]
+      [myId, req.params.id]
     );
     // Archivos: añadir URL firmada temporal para ver/descargar (Sprint 5)
     const { signedUrl } = require('../services/storage');
