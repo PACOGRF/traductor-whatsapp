@@ -78,7 +78,8 @@ router.post('/login', async (req, res) => {
       token: signToken(user),
       must_change_password: !!user.must_change_password,
       name: user.first_name + ' ' + user.last_name,
-      role: user.role
+      role: user.role,
+      user_id: user.id,
     });
   } catch (err) {
     console.error('Error en /auth/login:', err.message);

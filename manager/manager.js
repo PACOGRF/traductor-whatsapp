@@ -244,7 +244,13 @@ function renderMessages() {
     }
 
     const time = msgDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-    const cls  = m.direction === 'incoming' ? 'incoming' : 'outgoing';
+    const activeConv = state.conversations.find(c => c.id === state.activeConvId);
+    const isInternal = activeConv?.channel === 'internal';
+    const myId = Number(localStorage.getItem('chatlink_user_id'));
+    const isMine = isInternal ? (m.sender_user_id === myId) : (m.direction === 'outgoing');
+    const cls  = isInternal ? (isMine ? 'outgoing' : 'incoming') : (m.direction === 'incoming' ? 'incoming' : 'outgoing');
+    const senderLabel = (isInternal && !isMine && m.sender_name)
+      ? `<div class="msg-sender-name">${esc(m.sender_name)}</div>` : '';
 
     let mainText, subText;
     if (m.direction === 'incoming') {
@@ -292,13 +298,16 @@ function renderMessages() {
       if (m.original_text === `📎 ${m.media_url}`) { mainText = ''; subText = ''; }
     }
 
+    const readReceipt = isMine
+      ? `<span class="msg-read-receipt" data-msg-id="${m.id}" title=""></span>` : '';
     return `${dateDivider}
-      <div class="msg-bubble ${cls}" data-msg-id="${m.id}">
+      <div class="msg-bubble ${cls}${isInternal ? ' internal' : ''}" data-msg-id="${m.id}">
+        ${senderLabel}
         <button class="msg-pin-btn" data-msg-id="${m.id}" title="Crear tarea o nota de este mensaje">${IC.pin}</button>
         ${mediaHtml}
         ${mainText ? `<div class="msg-original">${mainText}</div>` : ''}
         ${subText}
-        <span class="msg-time">${time}</span>
+        <span class="msg-time">${time}${readReceipt}</span>
       </div>${notesHtml}`;
   }).join('') + renderScheduledHtml();
 
@@ -443,6 +452,12 @@ function taskCardHtml(t, showClient) {
           <button class="task-del-btn" data-id="${t.id}" title="Eliminar" class="btn-danger">${IC.trash}</button>
         </div>
       </div>
+      ${t.requires_confirmation && t.confirm_user_ids && t.confirm_user_ids.length ? `
+        <div class="task-confirm-bar">
+          <span class="task-confirm-count">${t.confirmation_count}/${t.confirm_user_ids.length} confirmado</span>
+          ${!t.confirmed_by_me && t.confirm_user_ids.includes(Number(localStorage.getItem('chatlink_user_id'))) ? `
+            <button class="task-confirm-btn" data-id="${t.id}">Confirmar lectura</button>` : ''}
+        </div>` : ''}
     </div>`;
 }
 
@@ -455,6 +470,8 @@ function wireTaskCardEvents(rootEl) {
     b.addEventListener('click', () => openTaskModal({ taskId: Number(b.dataset.id) })));
   rootEl.querySelectorAll('.task-goto-btn').forEach(b =>
     b.addEventListener('click', () => gotoMessage(Number(b.dataset.conv), Number(b.dataset.msg))));
+  rootEl.querySelectorAll('.task-confirm-btn').forEach(b =>
+    b.addEventListener('click', () => confirmTask(Number(b.dataset.id))));
 }
 
 // Mitad superior derecha: tareas (no realizadas) de la conversación abierta
@@ -560,6 +577,11 @@ function openTaskModal(ctx = {}) {
   $('task-due').value = task && task.due_at ? toLocalInputValue(new Date(task.due_at)) : '';
   $('task-priority').checked = task ? !!task.high_priority : false;
 
+  // Confirmación de lectura obligatoria
+  const reqConfirm = task ? !!task.requires_confirmation : false;
+  $('task-requires-confirm').checked = reqConfirm;
+  renderTaskConfirmUsers(reqConfirm, task ? (task.confirm_user_ids || []) : []);
+
   $('task-modal').classList.remove('hidden');
   $('task-overlay').classList.remove('hidden');
   $('task-text').focus();
@@ -598,12 +620,18 @@ async function saveTaskModal() {
     return;
   }
 
+  const requiresConfirm = $('task-requires-confirm').checked;
+  const confirmIds = requiresConfirm
+    ? Array.from($('task-confirm-user-list').querySelectorAll('input[type=checkbox]:checked')).map(cb => Number(cb.value))
+    : [];
   const body = {
     text,
     assigned_to: Number($('task-assigned').value) || null,
     high_priority: $('task-priority').checked,
     remind_at: computeRemindAt(),
     due_at: $('task-due').value ? new Date($('task-due').value).toISOString() : null,
+    requires_confirmation: requiresConfirm,
+    confirm_user_ids: confirmIds,
   };
 
   let r;
@@ -636,6 +664,8 @@ $('task-close').addEventListener('click', closeTaskModal);
 $('task-overlay').addEventListener('click', closeTaskModal);
 $('task-remind').addEventListener('change', () =>
   $('task-remind-custom').classList.toggle('hidden', $('task-remind').value !== 'custom'));
+$('task-requires-confirm').addEventListener('change', () =>
+  renderTaskConfirmUsers($('task-requires-confirm').checked, []));
 
 /* ── Pantalla TAREAS (tabla completa) ────────────────── */
 function openTasksScreen() { $('tasks-screen').classList.remove('hidden'); renderTasksScreen(); }
@@ -699,23 +729,33 @@ async function selectConversation(id) {
   const conv = state.conversations.find(c => c.id === id);
   if (!conv) return;
 
-  // Cabecera: identificación + idioma en la misma línea junto a ChatLink.
-  // En Telegram el bot no conoce el teléfono (privacidad del canal): se muestra el nombre.
-  const langSuffix = conv.guest_language && conv.guest_language !== 'es'
-    ? ` · habla ${langName(conv.guest_language)}` : '';
-  // Si el cliente compartió su contacto, mostrar su nombre y teléfono reales (ficha)
-  const who = conv.channel === 'telegram'
-    ? `✈️ ${conv.contact_name || conv.guest_name || 'Cliente Telegram'}${conv.contact_phone ? ' · ' + conv.contact_phone : ''} · Telegram`
-    : conv.guest_phone;
-  chatGuestName.textContent = `${who}${langSuffix}`;
+  // Cabecera
+  if (conv.channel === 'internal') {
+    chatGuestName.textContent = conv.internal_name || 'Chat interno';
+    $('chat-guest-meta').textContent = 'Chat de equipo';
+    $('lang-override').style.display = 'none';
+    $('schedule-btn').style.display = 'none';
+  } else {
+    $('lang-override').style.display = '';
+    $('schedule-btn').style.display = '';
+    $('chat-guest-meta').textContent = '';
+    const langSuffix = conv.guest_language && conv.guest_language !== 'es'
+      ? ` · habla ${langName(conv.guest_language)}` : '';
+    if (conv.channel === 'telegram') {
+      chatGuestName.innerHTML = `${IC.telegram} ${esc(conv.contact_name || conv.guest_name || 'Cliente Telegram')}${conv.contact_phone ? ' · ' + esc(conv.contact_phone) : ''} · Telegram${esc(langSuffix)}`;
+    } else {
+      chatGuestName.textContent = `${conv.guest_phone || ''}${langSuffix}`;
+    }
+  }
 
   // Permiso de respuesta (Sprint 2): empleados "solo leer" no pueden escribir
   const readonly = conv.can_reply === false;
-  $('readonly-note').classList.toggle('hidden', !readonly);
+  $('readonly-note').classList.toggle('hidden', !readonly || conv.channel === 'internal');
   msgInput.disabled = readonly;
   sendBtn.disabled = readonly;
   $('schedule-btn').disabled = readonly;
   $('attach-btn').disabled = readonly;
+  msgInput.placeholder = conv.channel === 'internal' ? 'Mensaje interno…' : 'Escribe en español…';
 
   // Mostrar chat, ocultar bienvenida
   welcomeScreen.style.display = 'none';
@@ -734,6 +774,7 @@ async function selectConversation(id) {
   await loadScheduled(id);
   await loadNotes(id);
   renderConvTasks();
+  markMessagesRead(id);
 
   // Propuesta de ficha pendiente (llegó estando desconectado): preguntar ahora
   if (conv.pending_contact && !conv.contact_id) {
@@ -750,10 +791,14 @@ async function sendReply() {
   msgInput.value = '';
   autoResize();
 
-  const langOverride = $('lang-override').value;
   const conv = state.conversations.find(c => c.id === state.activeConvId);
-  const phoneNumberId = conv?.phone_number_id || window.CHATLINK_PHONE_NUMBER_ID || null;
-  socket.emit('manager_reply', { conversationId: state.activeConvId, text, langOverride, phoneNumberId });
+  if (conv?.channel === 'internal') {
+    socket.emit('internal_message', { conversationId: state.activeConvId, text });
+  } else {
+    const langOverride = $('lang-override').value;
+    const phoneNumberId = conv?.phone_number_id || window.CHATLINK_PHONE_NUMBER_ID || null;
+    socket.emit('manager_reply', { conversationId: state.activeConvId, text, langOverride, phoneNumberId });
+  }
   sendBtn.disabled = false;
   msgInput.focus();
 }
@@ -1783,4 +1828,200 @@ async function searchConvMessages(q) {
     });
   } catch (_) {}
 }
+
+// ============ SPRINT 5: CHAT INTERNO + TRAZABILIDAD ============
+
+// -- Confirmacion de lectura en tareas --
+function renderTaskConfirmUsers(show, selectedIds) {
+  const wrap = $('task-confirm-users');
+  const list = $('task-confirm-user-list');
+  if (!show) { wrap.classList.add('hidden'); return; }
+  wrap.classList.remove('hidden');
+  const users = window._cachedUsers || [];
+  list.innerHTML = users.map(u =>
+    `<label class="task-check-row" style="font-size:0.83rem">
+      <input type="checkbox" value="${u.id}" ${(selectedIds || []).includes(u.id) ? 'checked' : ''}>
+      <span>${esc(u.first_name + ' ' + (u.last_name || ''))}</span>
+    </label>`
+  ).join('');
+}
+
+async function confirmTask(taskId) {
+  const r = await apiFetch(`/api/tasks/${taskId}/confirm`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  });
+  if (r) { await loadTasks(); showToast('Lectura confirmada'); }
+}
+
+// -- Trazabilidad de lectura (read receipts) --
+const _reads = {};
+
+async function markMessagesRead(convId) {
+  const ids = (state.messages || []).map(m => m.id);
+  if (!ids.length || !convId) return;
+  try {
+    await apiFetch('/api/messages/mark-read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message_ids: ids }),
+    });
+    const receipts = await apiFetch(`/api/conversations/${convId}/read-receipts`);
+    if (Array.isArray(receipts)) {
+      receipts.forEach(r => {
+        if (!_reads[r.message_id]) _reads[r.message_id] = [];
+        const exists = _reads[r.message_id].some(x => x.user_id === r.user_id);
+        if (!exists) _reads[r.message_id].push(r);
+      });
+      updateReadReceiptUI();
+    }
+  } catch (_) {}
+}
+
+function updateReadReceiptUI() {
+  const myId = Number(localStorage.getItem('chatlink_user_id'));
+  document.querySelectorAll('.msg-read-receipt').forEach(el => {
+    const mid = Number(el.dataset.msgId);
+    const readers = (_reads[mid] || []).filter(r => r.user_id !== myId);
+    if (!readers.length) {
+      el.textContent = '';
+      el.title = '';
+    } else {
+      el.textContent = ' ✓✓';
+      el.title = 'Leído por: ' + readers.map(r =>
+        r.user_name + ' ' + new Date(r.read_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+      ).join(', ');
+    }
+  });
+}
+
+socket.on('messages_read', ({ conversation_id, reads }) => {
+  if (conversation_id !== state.activeConvId) return;
+  reads.forEach(r => {
+    if (!_reads[r.message_id]) _reads[r.message_id] = [];
+    const exists = _reads[r.message_id].some(x => x.user_id === r.user_id);
+    if (!exists) _reads[r.message_id].push(r);
+  });
+  updateReadReceiptUI();
+});
+
+socket.on('conv_list_changed', () => loadConversations());
+
+// -- Chat interno: modal selector de empleados --
+let intConvState = { users: [], selected: new Set(), filter: 'all', q: '' };
+
+async function openIntConvModal() {
+  intConvState.selected = new Set();
+  intConvState.filter = 'all';
+  intConvState.q = '';
+  $('intconv-search').value = '';
+  if (!window._cachedUsers) {
+    window._cachedUsers = await apiFetch('/api/users') || [];
+  }
+  const myId = Number(localStorage.getItem('chatlink_user_id'));
+  intConvState.users = (window._cachedUsers || []).filter(u => u.id !== myId);
+  $('intconv-overlay').classList.remove('hidden');
+  $('intconv-modal').classList.remove('hidden');
+  renderIntConvList();
+  $('intconv-search').focus();
+}
+
+function closeIntConvModal() {
+  $('intconv-overlay').classList.add('hidden');
+  $('intconv-modal').classList.add('hidden');
+}
+
+function renderIntConvList() {
+  const { users, selected, filter, q } = intConvState;
+  const lower = q.toLowerCase().trim();
+  let list = users.filter(u => {
+    if (!lower) return true;
+    const name = `${u.first_name} ${u.last_name || ''}`.toLowerCase();
+    return name.includes(lower);
+  });
+  let html = '';
+  if (filter !== 'all' && !lower) {
+    const key = filter === 'role' ? 'role' : 'position_name';
+    const groups = {};
+    list.forEach(u => {
+      const g = u[key] || 'Sin ' + (filter === 'role' ? 'rol' : 'puesto');
+      if (!groups[g]) groups[g] = [];
+      groups[g].push(u);
+    });
+    for (const [gname, gusers] of Object.entries(groups)) {
+      html += `<div class="intconv-group-label">${esc(gname)}</div>`;
+      html += gusers.map(u => intConvUserRow(u, selected)).join('');
+    }
+  } else {
+    html = list.map(u => intConvUserRow(u, selected)).join('') ||
+      '<div style="padding:10px 12px;color:#999;font-size:0.82rem">Sin coincidencias</div>';
+  }
+  $('intconv-list').innerHTML = html;
+  $('intconv-list').querySelectorAll('.intconv-check').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const uid = Number(cb.dataset.uid);
+      cb.checked ? intConvState.selected.add(uid) : intConvState.selected.delete(uid);
+      $('intconv-selected-count').textContent =
+        intConvState.selected.size + ' seleccionado' + (intConvState.selected.size !== 1 ? 's' : '');
+    });
+  });
+  $('intconv-selected-count').textContent =
+    selected.size + ' seleccionado' + (selected.size !== 1 ? 's' : '');
+}
+
+function intConvUserRow(u, selected) {
+  const name = `${u.first_name} ${u.last_name || ''}`.trim();
+  return `<label class="intconv-item">
+    <input type="checkbox" class="intconv-check" data-uid="${u.id}" ${selected.has(u.id) ? 'checked' : ''}>
+    <span class="intconv-item-name">${esc(name)}</span>
+    <span class="intconv-item-sub">${esc(u.position_name || u.role || '')}</span>
+  </label>`;
+}
+
+async function createInternalConv() {
+  const ids = Array.from(intConvState.selected);
+  if (!ids.length) { showToast('Selecciona al menos un empleado'); return; }
+  const myId = Number(localStorage.getItem('chatlink_user_id'));
+  const myUser = (window._cachedUsers || []).find(u => u.id === myId);
+  const myName = myUser ? myUser.first_name : 'Yo';
+  const names = intConvState.users.filter(u => ids.includes(u.id)).map(u => u.first_name);
+  const chatName = [myName, ...names].join(', ');
+  try {
+    const r = await apiFetch('/api/internal-conversations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ member_ids: ids, name: chatName }),
+    });
+    if (!r || !r.id) throw new Error('Sin respuesta');
+    closeIntConvModal();
+    await loadConversations();
+    selectConversation(r.id);
+    showToast('Chat interno creado');
+  } catch (err) {
+    showToast('Error: ' + (err.message || 'no se pudo crear el chat'));
+  }
+}
+
+// Eventos modal chat interno
+$('intconv-tabs').querySelectorAll('.intconv-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    $('intconv-tabs').querySelectorAll('.intconv-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    intConvState.filter = btn.dataset.filter;
+    renderIntConvList();
+  });
+});
+$('intconv-search').addEventListener('input', () => {
+  intConvState.q = $('intconv-search').value;
+  renderIntConvList();
+});
+$('intconv-close').addEventListener('click', closeIntConvModal);
+$('intconv-cancel').addEventListener('click', closeIntConvModal);
+$('intconv-overlay').addEventListener('click', closeIntConvModal);
+$('intconv-create').addEventListener('click', createInternalConv);
+$('conv-internal-btn').addEventListener('click', openIntConvModal);
+
+// Precarga de usuarios para confirmacion de tareas
+(async () => {
+  window._cachedUsers = await apiFetch('/api/users') || [];
+})();
 

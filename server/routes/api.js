@@ -13,18 +13,21 @@ async function sendPush(app, payload) {
   }
 }
 
-// Listar todas las conversaciones
+// Listar todas las conversaciones (clientes + chats internos del usuario)
 router.get('/conversations', async (req, res) => {
   try {
+    const userId = req.user?.user_id || null;
     const rows = await db.all(`
       SELECT c.*, ct.name AS contact_name, ct.phone AS contact_phone, ct.group_id AS contact_group_id,
+        cp.user_id AS is_member,
         (SELECT m.translated_text FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message,
         (SELECT m.created_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message_at,
         (SELECT m.direction FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_direction
       FROM conversations c
       LEFT JOIN contacts ct ON ct.id = c.contact_id
-      ORDER BY last_message_at DESC
-    `);
+      LEFT JOIN conversation_participants cp ON cp.conversation_id = c.id AND cp.user_id = ?
+      ORDER BY last_message_at DESC NULLS LAST
+    `, [userId]);
     // Marca "sin responder": el último mensaje es del cliente y supera el umbral de la empresa
     const company = await db.get('SELECT alert_hours FROM companies WHERE id = 1');
     const alertHours = (company && company.alert_hours) || 4;
@@ -34,6 +37,11 @@ router.get('/conversations', async (req, res) => {
     const vis = await getVisibility(req.user);
     const result = [];
     for (const r of rows) {
+      if (r.channel === 'internal') {
+        if (!r.is_member) continue; // solo miembros ven el chat interno
+        result.push({ ...r, unanswered_hours: null, can_reply: true });
+        continue;
+      }
       const access = convAccess(vis, r);
       if (access === 'none') continue;
       let unanswered_hours = null;
@@ -52,19 +60,34 @@ router.get('/conversations', async (req, res) => {
 // Mensajes de una conversación (los empleados solo si la conversación es visible)
 router.get('/conversations/:id/messages', async (req, res) => {
   try {
-    if (req.user?.role === 'employee') {
+    const conv = await db.get('SELECT * FROM conversations WHERE id = ?', [req.params.id]);
+    if (!conv) return res.status(404).json({ error: 'Conversación no encontrada' });
+
+    if (conv.channel === 'internal') {
+      // Chat interno: solo accesible para miembros
+      const member = await db.get(
+        'SELECT 1 FROM conversation_participants WHERE conversation_id = ? AND user_id = ?',
+        [req.params.id, req.user?.user_id]
+      );
+      if (!member) return res.status(403).json({ error: 'Sin acceso a este chat' });
+    } else if (req.user?.role === 'employee') {
       const { accessForConversation } = require('../services/visibility');
       const { access } = await accessForConversation(req.user, req.params.id);
       if (access === 'none') return res.status(403).json({ error: 'Sin acceso a esta conversación' });
     }
+
     const rows = await db.all(
-      'SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC',
+      `SELECT m.*, u.first_name AS sender_first_name, u.last_name AS sender_last_name
+       FROM messages m
+       LEFT JOIN users u ON u.id = m.sender_user_id
+       WHERE m.conversation_id = ? ORDER BY m.created_at ASC`,
       [req.params.id]
     );
     // Archivos: añadir URL firmada temporal para ver/descargar (Sprint 5)
     const { signedUrl } = require('../services/storage');
     for (const r of rows) {
       if (r.storage_path) r.signed_url = await signedUrl(r.storage_path);
+      if (r.sender_first_name) r.sender_name = `${r.sender_first_name} ${r.sender_last_name || ''}`.trim();
     }
     res.json(rows);
   } catch (err) {
@@ -224,9 +247,10 @@ router.post('/demo/message', async (req, res) => {
 router.get('/users', async (req, res) => {
   try {
     const rows = await db.all(
-      `SELECT id, first_name, last_name, role FROM users
-       WHERE company_id = ? AND active = true
-       ORDER BY last_name, first_name`,
+      `SELECT u.id, u.first_name, u.last_name, u.role, u.position_id, p.name AS position_name
+       FROM users u LEFT JOIN positions p ON p.id = u.position_id
+       WHERE u.company_id = ? AND u.active = true
+       ORDER BY u.last_name, u.first_name`,
       [req.user?.company_id || 1]
     );
     res.json(rows);
@@ -243,24 +267,35 @@ function emitTasksChanged(req) {
 // Todas las tareas vivas (borrado lógico fuera) con nombres para mostrar
 router.get('/tasks', async (req, res) => {
   try {
+    const userId = req.user?.user_id;
     const rows = await db.all(
       `SELECT t.*,
               c.guest_name  AS conv_guest_name,
               c.channel     AS conv_channel,
               ct.name       AS contact_name,
               u.first_name  AS assigned_first_name,
-              u.last_name   AS assigned_last_name
+              u.last_name   AS assigned_last_name,
+              COALESCE(tcc.confirmation_count, 0) AS confirmation_count,
+              tc_me.confirmed_at AS confirmed_by_me_at
        FROM tasks t
        LEFT JOIN conversations c ON c.id = t.conversation_id
        LEFT JOIN contacts ct     ON ct.id = t.contact_id
        LEFT JOIN users u         ON u.id = t.assigned_to
+       LEFT JOIN (
+         SELECT task_id, COUNT(*) AS confirmation_count
+         FROM task_confirmations GROUP BY task_id
+       ) tcc ON tcc.task_id = t.id
+       LEFT JOIN task_confirmations tc_me ON tc_me.task_id = t.id AND tc_me.user_id = ?
        WHERE t.deleted_at IS NULL
-       ORDER BY t.id DESC`
+       ORDER BY t.id DESC`,
+      [userId]
     );
     res.json(rows.map(r => ({
       ...r,
       client_label: r.contact_name || r.conv_guest_name || r.guest_name || '—',
       assigned_label: r.assigned_first_name ? `${r.assigned_first_name} ${r.assigned_last_name || ''}`.trim() : null,
+      confirmation_count: Number(r.confirmation_count) || 0,
+      confirmed_by_me: !!r.confirmed_by_me_at,
     })));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -269,7 +304,8 @@ router.get('/tasks', async (req, res) => {
 router.post('/tasks', async (req, res) => {
   try {
     const { conversation_id, anchored_message_id, text, assigned_to,
-            notify_also, high_priority, remind_at, due_at } = req.body;
+            notify_also, high_priority, remind_at, due_at,
+            requires_confirmation, confirm_user_ids } = req.body;
     if (!text || !text.trim()) return res.status(400).json({ error: 'El comentario es obligatorio' });
 
     let conv = null, guestLabel = null, contactId = null;
@@ -286,12 +322,14 @@ router.post('/tasks', async (req, res) => {
       `INSERT INTO tasks (company_id, contact_id, conversation_id, anchored_message_id,
                           msg_id, guest_name, message_text,
                           assigned_to, notify_also, status, high_priority,
-                          remind_at, due_at, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
+                          remind_at, due_at, created_by,
+                          requires_confirmation, confirm_user_ids)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
       [req.user?.company_id || 1, contactId, conversation_id || null, anchored_message_id || null,
        anchored_message_id || null, guestLabel, text.trim(),
        assigned_to || null, notify_also && notify_also.length ? notify_also : null,
-       !!high_priority, remind_at || null, due_at || null, req.user?.user_id || null]
+       !!high_priority, remind_at || null, due_at || null, req.user?.user_id || null,
+       !!requires_confirmation, confirm_user_ids && confirm_user_ids.length ? confirm_user_ids : null]
     );
     const row = await db.get('SELECT * FROM tasks ORDER BY id DESC LIMIT 1');
 
@@ -339,13 +377,14 @@ router.put('/tasks/:id', async (req, res) => {
     const task = await db.get('SELECT * FROM tasks WHERE id = ? AND deleted_at IS NULL', [req.params.id]);
     if (!task) return res.status(404).json({ error: 'No encontrada' });
 
-    const { text, assigned_to, notify_also, high_priority, remind_at, due_at } = req.body;
-    // Si cambia la alerta, se reactiva el aviso del cron
+    const { text, assigned_to, notify_also, high_priority, remind_at, due_at,
+            requires_confirmation, confirm_user_ids } = req.body;
     const remindChanged = (remind_at || null) !== (task.remind_at ? new Date(task.remind_at).toISOString() : null);
 
     await db.run(
       `UPDATE tasks SET message_text = ?, assigned_to = ?, notify_also = ?,
-              high_priority = ?, remind_at = ?, due_at = ?
+              high_priority = ?, remind_at = ?, due_at = ?,
+              requires_confirmation = ?, confirm_user_ids = ?
               ${remindChanged ? ', remind_sent_at = NULL' : ''}
        WHERE id = ?`,
       [text !== undefined ? text : task.message_text,
@@ -354,6 +393,8 @@ router.put('/tasks/:id', async (req, res) => {
        high_priority !== undefined ? !!high_priority : task.high_priority,
        remind_at !== undefined ? remind_at : task.remind_at,
        due_at !== undefined ? due_at : task.due_at,
+       requires_confirmation !== undefined ? !!requires_confirmation : task.requires_confirmation,
+       confirm_user_ids !== undefined ? (confirm_user_ids && confirm_user_ids.length ? confirm_user_ids : null) : task.confirm_user_ids,
        req.params.id]
     );
     emitTasksChanged(req);
@@ -1003,6 +1044,168 @@ router.delete('/scheduled/:id', async (req, res) => {
     await logAudit(req.user?.company_id, req.user?.user_id, 'scheduled_message_cancelled',
       { scheduled_id: sm.id, conversation_id: sm.conversation_id });
     res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── CHAT INTERNO (Sprint 5) ────────────────────────────────
+
+// Crear conversación interna con un grupo de empleados
+router.post('/internal-conversations', async (req, res) => {
+  try {
+    const companyId = req.user?.company_id || 1;
+    const userId    = req.user?.user_id;
+    const { member_ids, name } = req.body;
+
+    if (!Array.isArray(member_ids) || member_ids.length === 0) {
+      return res.status(400).json({ error: 'Selecciona al menos un participante' });
+    }
+    // Incluir al creador si no está en la lista
+    const allIds = Array.from(new Set([userId, ...member_ids.map(Number)].filter(Boolean)));
+
+    await db.run(
+      `INSERT INTO conversations (company_id, channel, status, internal_name, updated_at)
+       VALUES (?, 'internal', 'open', ?, NOW())`,
+      [companyId, name || null]
+    );
+    const conv = await db.get('SELECT * FROM conversations ORDER BY id DESC LIMIT 1');
+
+    for (const uid of allIds) {
+      await db.run(
+        'INSERT INTO conversation_participants (conversation_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING',
+        [conv.id, uid]
+      );
+    }
+
+    const { logAudit } = require('../services/audit');
+    await logAudit(companyId, userId, 'internal_conv_created',
+      { conv_id: conv.id, members: allIds });
+
+    const io = req.app.get('io');
+    if (io) io.emit('conv_list_changed');
+
+    res.json({ id: conv.id });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Miembros de una conversación interna
+router.get('/conversations/:id/members', async (req, res) => {
+  try {
+    const rows = await db.all(
+      `SELECT u.id, u.first_name, u.last_name, u.role, p.name AS position_name
+       FROM conversation_participants cp
+       JOIN users u ON u.id = cp.user_id
+       LEFT JOIN positions p ON p.id = u.position_id
+       WHERE cp.conversation_id = ?
+       ORDER BY u.last_name, u.first_name`,
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── TRAZABILIDAD DE LECTURA (Sprint 5) ────────────────────
+
+// Marcar mensajes como leídos (batch)
+router.post('/messages/mark-read', async (req, res) => {
+  try {
+    const { message_ids } = req.body;
+    if (!Array.isArray(message_ids) || !message_ids.length) return res.json({ ok: true });
+
+    const userId    = req.user?.user_id;
+    const companyId = req.user?.company_id || 1;
+
+    for (const mid of message_ids) {
+      await db.run(
+        `INSERT INTO message_reads (message_id, user_id, company_id)
+         VALUES (?, ?, ?) ON CONFLICT DO NOTHING`,
+        [mid, userId, companyId]
+      );
+    }
+
+    // Obtener los reads recién insertados para broadcast
+    const placeholders = message_ids.map(() => '?').join(',');
+    const reads = await db.all(
+      `SELECT mr.message_id, mr.user_id, mr.read_at, u.first_name, u.last_name
+       FROM message_reads mr JOIN users u ON u.id = mr.user_id
+       WHERE mr.message_id IN (${placeholders}) AND mr.user_id = ?`,
+      [...message_ids, userId]
+    );
+
+    const io = req.app.get('io');
+    if (io && reads.length) {
+      // Obtener conv_id del primer mensaje para saber a qué sala emitir
+      const msg = await db.get('SELECT conversation_id FROM messages WHERE id = ?', [message_ids[0]]);
+      if (msg) {
+        io.emit('messages_read', {
+          conversation_id: msg.conversation_id,
+          reads: reads.map(r => ({
+            message_id: r.message_id,
+            user_id: r.user_id,
+            user_name: `${r.first_name} ${r.last_name || ''}`.trim(),
+            read_at: r.read_at,
+          })),
+        });
+      }
+    }
+
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Read receipts de una conversación (para renderizar ✓✓ al abrir el chat)
+router.get('/conversations/:id/read-receipts', async (req, res) => {
+  try {
+    const rows = await db.all(
+      `SELECT mr.message_id, mr.user_id, mr.read_at, u.first_name, u.last_name
+       FROM message_reads mr
+       JOIN messages m ON m.id = mr.message_id
+       JOIN users u ON u.id = mr.user_id
+       WHERE m.conversation_id = ?
+       ORDER BY mr.read_at ASC`,
+      [req.params.id]
+    );
+    res.json(rows.map(r => ({
+      ...r,
+      user_name: `${r.first_name} ${r.last_name || ''}`.trim(),
+    })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── CONFIRMACIONES DE TAREAS (Sprint 5) ───────────────────
+
+// Confirmar lectura de una tarea
+router.post('/tasks/:id/confirm', async (req, res) => {
+  try {
+    const userId    = req.user?.user_id;
+    const companyId = req.user?.company_id || 1;
+    const task = await db.get('SELECT * FROM tasks WHERE id = ? AND deleted_at IS NULL', [req.params.id]);
+    if (!task) return res.status(404).json({ error: 'Tarea no encontrada' });
+
+    await db.run(
+      `INSERT INTO task_confirmations (task_id, user_id, company_id)
+       VALUES (?, ?, ?) ON CONFLICT DO NOTHING`,
+      [req.params.id, userId, companyId]
+    );
+
+    emitTasksChanged(req);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Confirmaciones de una tarea (quién confirmó y cuándo)
+router.get('/tasks/:id/confirmations', async (req, res) => {
+  try {
+    const rows = await db.all(
+      `SELECT tc.user_id, tc.confirmed_at, u.first_name, u.last_name
+       FROM task_confirmations tc JOIN users u ON u.id = tc.user_id
+       WHERE tc.task_id = ?
+       ORDER BY tc.confirmed_at ASC`,
+      [req.params.id]
+    );
+    res.json(rows.map(r => ({
+      ...r,
+      user_name: `${r.first_name} ${r.last_name || ''}`.trim(),
+    })));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

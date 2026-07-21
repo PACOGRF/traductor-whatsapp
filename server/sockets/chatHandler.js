@@ -62,6 +62,39 @@ function registerChatHandlers(io, app) {
       }
     });
 
+    // Mensaje en chat interno (no traduce, no envía por canal externo)
+    socket.on('internal_message', async ({ conversationId, text }) => {
+      if (!text || !text.trim()) return;
+      try {
+        const member = await db.get(
+          'SELECT 1 FROM conversation_participants WHERE conversation_id = ? AND user_id = ?',
+          [conversationId, socket.user?.user_id]
+        );
+        if (!member) return socket.emit('error', { msg: 'No perteneces a este chat' });
+
+        await db.run(
+          `INSERT INTO messages (conversation_id, direction, original_text, translated_text, sender_user_id)
+           VALUES (?, 'outgoing', ?, ?, ?)`,
+          [conversationId, text.trim(), text.trim(), socket.user?.user_id || null]
+        );
+        await db.run(
+          'UPDATE conversations SET updated_at = NOW() WHERE id = ?',
+          [conversationId]
+        );
+        const msg = await db.get('SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1', [conversationId]);
+        const u = socket.user?.user_id
+          ? await db.get('SELECT first_name, last_name FROM users WHERE id = ?', [socket.user.user_id])
+          : null;
+        if (u) msg.sender_name = `${u.first_name} ${u.last_name || ''}`.trim();
+
+        const conv = await db.get('SELECT * FROM conversations WHERE id = ?', [conversationId]);
+        io.emit('message_sent', { conversation: conv, message: msg });
+      } catch (err) {
+        console.error('Error en internal_message:', err);
+        socket.emit('error', { msg: err.message });
+      }
+    });
+
     socket.on('disconnect', () => {
       console.log('Panel del gestor desconectado:', socket.id);
     });

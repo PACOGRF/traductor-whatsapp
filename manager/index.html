@@ -32,8 +32,11 @@
         <button id="conv-search-btn" title="Buscar conversación">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </button>
-        <button id="conv-new-btn" title="Iniciar nueva conversación">
+        <button id="conv-new-btn" title="Iniciar nueva conversación con cliente">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <button id="conv-internal-btn" title="Nuevo chat interno entre empleados">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         </button>
         <button id="tasks-mobile-btn" class="tasks-mobile-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:14px;height:14px;vertical-align:middle;margin-right:4px"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17z"/></svg> Tareas</button>
       </div>
@@ -222,6 +225,15 @@
         <input type="checkbox" id="task-priority">
         <span><span class="prio-dot"></span> Prioridad alta</span>
       </label>
+
+      <label class="task-check-row">
+        <input type="checkbox" id="task-requires-confirm">
+        <span>Requiere confirmación de lectura</span>
+      </label>
+      <div id="task-confirm-users" class="hidden">
+        <label>Quién debe confirmar</label>
+        <div id="task-confirm-user-list"></div>
+      </div>
     </div>
 
     <div class="task-actions">
@@ -324,6 +336,31 @@
     <div class="ct-actions">
       <button id="newconv-new-contact" class="btn-secondary">+ Crear contacto nuevo</button>
       <button id="newconv-close2" class="btn-secondary">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: chat interno (selector de empleados) -->
+<div id="intconv-overlay" class="hidden"></div>
+<div id="intconv-modal" class="hidden">
+  <div id="intconv-header">
+    <span><svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Chat interno</span>
+    <button id="intconv-close">✕</button>
+  </div>
+  <div id="intconv-body">
+    <div id="intconv-tabs">
+      <button class="intconv-tab active" data-filter="all">Todos</button>
+      <button class="intconv-tab" data-filter="role">Por rol</button>
+      <button class="intconv-tab" data-filter="position">Por puesto</button>
+    </div>
+    <input id="intconv-search" type="search" placeholder="Buscar empleado…" autocomplete="off">
+    <div id="intconv-list"></div>
+    <div id="intconv-selected-bar">
+      <span id="intconv-selected-count">0 seleccionados</span>
+    </div>
+    <div class="ct-actions">
+      <button id="intconv-cancel" class="btn-secondary">Cancelar</button>
+      <button id="intconv-create" class="btn-primary">Crear chat</button>
     </div>
   </div>
 </div>

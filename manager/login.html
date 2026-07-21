@@ -162,6 +162,7 @@
           const data = await res.json();
           localStorage.setItem('chatlink_token', data.token);
           localStorage.setItem('chatlink_role', data.role || '');
+          localStorage.setItem('chatlink_user_id', data.user_id || '');
           // Primer login: cambio de contraseña obligatorio (D5)
           window.location.href = data.must_change_password ? '/change-password.html' : '/';
         } else {
