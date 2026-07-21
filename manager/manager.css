@@ -56,7 +56,7 @@ body {
   padding: 0.6rem 1rem;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   flex-shrink: 0;
 }
 
@@ -1263,13 +1263,13 @@ body {
 
 /* Botones de lupa y ➕ en la cabecera del sidebar */
 .sidebar-header-actions { display: flex; align-items: center; gap: 4px; }
-#conv-search-btn, #conv-new-btn {
+#conv-search-btn, #conv-new-btn, #conv-internal-btn {
   background: rgba(255,255,255,0.15); border: none; border-radius: 50%;
   width: 30px; height: 30px; cursor: pointer; color: white;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-#conv-search-btn:hover, #conv-new-btn:hover { background: rgba(255,255,255,0.3); }
-#conv-search-btn svg, #conv-new-btn svg { width: 16px; height: 16px; }
+#conv-search-btn:hover, #conv-new-btn:hover, #conv-internal-btn:hover { background: rgba(255,255,255,0.3); }
+#conv-search-btn svg, #conv-new-btn svg, #conv-internal-btn svg { width: 16px; height: 16px; }
 
 /* Barra de búsqueda en el sidebar */
 #conv-search-bar { background: var(--green-dark); padding: 0 0.6rem 0.5rem; flex-shrink: 0; }
