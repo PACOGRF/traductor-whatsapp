@@ -1914,13 +1914,14 @@ async function openIntConvModal() {
   intConvState.filter = 'all';
   intConvState.q = '';
   $('intconv-search').value = '';
-  if (!window._cachedUsers) {
-    window._cachedUsers = await apiFetch('/api/users') || [];
-  }
-  const myId = Number(localStorage.getItem('chatlink_user_id'));
-  intConvState.users = (window._cachedUsers || []).filter(u => u.id !== myId);
+  // Mostrar modal inmediatamente (no esperar a la carga de datos)
   $('intconv-overlay').classList.remove('hidden');
   $('intconv-modal').classList.remove('hidden');
+  $('intconv-list').innerHTML = '<div style="padding:12px;color:#999;font-size:0.82rem;text-align:center">Cargando empleados…</div>';
+  // Siempre recargar para tener datos frescos
+  window._cachedUsers = await apiFetch('/api/users') || [];
+  const myId = Number(localStorage.getItem('chatlink_user_id'));
+  intConvState.users = (window._cachedUsers || []).filter(u => u.id !== myId);
   renderIntConvList();
   $('intconv-search').focus();
 }
@@ -1952,8 +1953,12 @@ function renderIntConvList() {
       html += gusers.map(u => intConvUserRow(u, selected)).join('');
     }
   } else {
-    html = list.map(u => intConvUserRow(u, selected)).join('') ||
-      '<div style="padding:10px 12px;color:#999;font-size:0.82rem">Sin coincidencias</div>';
+    if (intConvState.users.length === 0) {
+      html = '<div style="padding:16px 12px;color:#999;font-size:0.82rem;text-align:center;line-height:1.5">No hay empleados disponibles.<br>Añade empleados desde la pantalla <b>EMPLEADOS</b> primero.</div>';
+    } else {
+      html = list.map(u => intConvUserRow(u, selected)).join('') ||
+        '<div style="padding:10px 12px;color:#999;font-size:0.82rem">Sin coincidencias</div>';
+    }
   }
   $('intconv-list').innerHTML = html;
   $('intconv-list').querySelectorAll('.intconv-check').forEach(cb => {
@@ -2020,8 +2025,10 @@ $('intconv-overlay').addEventListener('click', closeIntConvModal);
 $('intconv-create').addEventListener('click', createInternalConv);
 $('conv-internal-btn').addEventListener('click', openIntConvModal);
 
-// Precarga de usuarios para confirmacion de tareas
-(async () => {
-  window._cachedUsers = await apiFetch('/api/users') || [];
-})();
+// Cerrar modal de chat interno con Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$('intconv-modal').classList.contains('hidden')) {
+    closeIntConvModal();
+  }
+});
 
