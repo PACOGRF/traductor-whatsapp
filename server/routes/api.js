@@ -1062,12 +1062,12 @@ router.post('/internal-conversations', async (req, res) => {
     // Incluir al creador si no está en la lista
     const allIds = Array.from(new Set([userId, ...member_ids.map(Number)].filter(Boolean)));
 
-    await db.run(
+    const conv = await db.get(
       `INSERT INTO conversations (company_id, channel, status, internal_name, updated_at)
-       VALUES (?, 'internal', 'open', ?, NOW())`,
+       VALUES (?, 'internal', 'open', ?, NOW())
+       RETURNING id`,
       [companyId, name || null]
     );
-    const conv = await db.get('SELECT * FROM conversations ORDER BY id DESC LIMIT 1');
 
     for (const uid of allIds) {
       await db.run(
