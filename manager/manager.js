@@ -1529,9 +1529,15 @@ function renderContacts() {
     '<td>' + (c.group_name ? '<span class="ct-group-badge">' + esc(c.group_name) + '</span>' : '—') + '</td>' +
     '<td>' + esc(c.preferred_language || '—') + '</td>' +
     '<td class="row-actions">' +
-      '<button title="Editar" onclick="openCtModal(' + c.id + ')">✏️</button>' +
-      '<button title="Nueva conv." onclick="openNewConvModal(' + c.id + ')">💬</button>' +
-      '<button title="Eliminar" onclick="deleteContact(' + c.id + ')">🗑️</button>' +
+      '<button title="Editar contacto" onclick="openCtModal(' + c.id + ')">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
+      '</button>' +
+      '<button title="Iniciar conversación" onclick="openNewConvModal(' + c.id + ')">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>' +
+      '</button>' +
+      '<button title="Eliminar contacto" class="btn-danger" onclick="deleteContact(' + c.id + ')">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>' +
+      '</button>' +
     '</td>' +
     '</tr>'
   ).join('');

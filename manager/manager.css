@@ -1407,3 +1407,24 @@ body {
   #contacts-table { display: none; }
   #contacts-cards { display: block; }
 }
+
+/* ── Búsqueda con lupa en cabecera CONTACTOS ── */
+.ct-search-wrap {
+  position: relative; display: flex; align-items: center;
+}
+.ct-search-icon {
+  position: absolute; left: 9px; width: 15px; height: 15px;
+  stroke: rgba(255,255,255,0.7); pointer-events: none; flex-shrink: 0;
+}
+#contacts-search { padding-left: 30px; }
+
+/* ── Botones de acción SVG en tabla de contactos ── */
+.row-actions { white-space: nowrap; }
+.row-actions button {
+  background: none; border: none; cursor: pointer; padding: 4px 5px;
+  border-radius: 6px; line-height: 0; display: inline-flex; align-items: center;
+  color: #555; transition: background 0.15s, color 0.15s;
+}
+.row-actions button:hover { background: #e8f5e9; color: #1b5e20; }
+.row-actions button.btn-danger:hover { background: #ffebee; color: #b71c1c; }
+.row-actions button svg { width: 16px; height: 16px; }
