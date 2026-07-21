@@ -1427,4 +1427,39 @@ body {
 }
 .row-actions button:hover { background: #e8f5e9; color: #1b5e20; }
 .row-actions button.btn-danger:hover { background: #ffebee; color: #b71c1c; }
+
+/* ── SVG icons globales (IC.*) ── */
+.svg-icon {
+  width: 15px; height: 15px;
+  vertical-align: middle; flex-shrink: 0;
+  display: inline-block;
+}
+.msg-pin-btn .svg-icon { width: 14px; height: 14px; }
+.tc-actions button .svg-icon, .task-edit-btn .svg-icon, .task-del-btn .svg-icon { width: 14px; height: 14px; }
+.emp-edit-btn .svg-icon, .emp-key-btn .svg-icon, .emp-toggle-btn .svg-icon { width: 14px; height: 14px; }
+.conv-channel .svg-icon { width: 13px; height: 13px; opacity: 0.85; }
+.conv-unanswered .svg-icon { width: 13px; height: 13px; }
+
+/* ── Punto de prioridad ── */
+.prio-dot {
+  display: inline-block; width: 8px; height: 8px;
+  border-radius: 50%; background: #e53935;
+  vertical-align: middle; margin-right: 4px; flex-shrink: 0;
+}
+
+/* ── Punto de estado (empleados) ── */
+.status-dot {
+  display: inline-block; width: 8px; height: 8px;
+  border-radius: 50%; vertical-align: middle; margin-right: 4px; flex-shrink: 0;
+}
+.status-dot.active  { background: #43a047; }
+.status-dot.inactive { background: #bdbdbd; }
+
+/* ── Cabecera alertas: verde oscuro + texto rojo ── */
+#alerts-header {
+  background: var(--green-dark) !important;
+  color: #ef5350 !important;
+  display: flex; align-items: center;
+}
+#alerts-header svg { stroke: #ef5350; }
 .row-actions button svg { width: 16px; height: 16px; }

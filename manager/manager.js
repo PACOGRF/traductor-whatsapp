@@ -14,7 +14,21 @@ const state = {
   alerts: [],             // alertas vencidas globales (columna derecha, abajo)
   notes: [],              // notas ancladas de la conversación activa (D8)
 };
-let editingScheduledId = null; // id del programado que se está editando en el modal
+let editingScheduledId = null;
+
+/* ── Iconos SVG (trazo 2px, estilo Telegram) ─────────── */
+const IC = {
+  telegram: '<svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+  warn:     '<svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+  edit:     '<svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+  trash:    '<svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>',
+  key:      '<svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>',
+  refresh:  '<svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>',
+  pin:      '<svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17z"/></svg>',
+  goto:     '<svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>',
+  user:     '<svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+  users:    '<svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+};
 
 /* ── Referencias DOM ────────────────────────────────── */
 const $ = id => document.getElementById(id);
@@ -100,7 +114,7 @@ socket.on('contact_saved', ({ conversation_id, name, phone }) => {
     if (state.activeConvId === conversation_id) {
       const langSuffix = conv.guest_language && conv.guest_language !== 'es'
         ? ` · habla ${langName(conv.guest_language)}` : '';
-      chatGuestName.textContent = `✈️ ${name}${phone ? ' · ' + phone : ''} · Telegram${langSuffix}`;
+      chatGuestName.innerHTML = `${IC.telegram} ${esc(name)}${phone ? ' · ' + esc(phone) : ''} · Telegram${esc(langSuffix)}`;
     }
   }
   showToast(`✅ Cliente en fichas: ${name} (${phone})`, 5000);
@@ -197,8 +211,8 @@ function renderConvList() {
         <div class="conv-avatar">${initials}</div>
         <div class="conv-info">
           <div class="conv-name">
-            ${c.channel === 'telegram' ? '<span class="conv-channel" title="Telegram">✈️</span>' : ''}${esc(c.contact_name || c.guest_name || c.guest_phone)}
-            ${c.unanswered_hours ? `<span class="conv-unanswered" title="Sin responder">⚠️ ${c.unanswered_hours}h</span>` : ''}
+            ${c.channel === 'telegram' ? `<span class="conv-channel" title="Telegram">${IC.telegram}</span>` : ''}${esc(c.contact_name || c.guest_name || c.guest_phone)}
+            ${c.unanswered_hours ? `<span class="conv-unanswered" title="Sin responder">${IC.warn} ${c.unanswered_hours}h</span>` : ''}
             ${c.guest_language && c.guest_language !== 'es' ? `<span class="conv-lang">${langName(c.guest_language)}</span>` : ''}
           </div>
           <div class="conv-preview">${esc(preview)}</div>
@@ -280,7 +294,7 @@ function renderMessages() {
 
     return `${dateDivider}
       <div class="msg-bubble ${cls}" data-msg-id="${m.id}">
-        <button class="msg-pin-btn" data-msg-id="${m.id}" title="Crear tarea o nota de este mensaje">📌</button>
+        <button class="msg-pin-btn" data-msg-id="${m.id}" title="Crear tarea o nota de este mensaje">${IC.pin}</button>
         ${mediaHtml}
         ${mainText ? `<div class="msg-original">${mainText}</div>` : ''}
         ${subText}
@@ -328,7 +342,7 @@ function renderScheduledHtml() {
            <button class="sched-del-btn" data-id="${s.id}">Descartar</button>
          </div>`
       : `<div class="sched-actions">
-           <button class="sched-edit-btn" data-id="${s.id}">✏️ Editar</button>
+           <button class="sched-edit-btn" data-id="${s.id}">${IC.edit} Editar</button>
            <button class="sched-del-btn" data-id="${s.id}">✕ Cancelar</button>
          </div>`;
     return `
@@ -414,19 +428,19 @@ function taskCardHtml(t, showClient) {
   return `
     <div class="task-card ${overdue ? 'overdue-card' : ''}">
       <div class="tc-top">
-        <span class="tc-main">${t.high_priority ? '<span class="prio-dot">🔴</span> ' : ''}${showClient && t.client_label ? `<strong>${esc(t.client_label)}</strong> · ` : ''}${esc(truncate(t.message_text || '', 100))}</span>
+        <span class="tc-main">${t.high_priority ? '<span class="prio-dot"></span> ' : ''}${showClient && t.client_label ? `<strong>${esc(t.client_label)}</strong> · ` : ''}${esc(truncate(t.message_text || '', 100))}</span>
         <button class="status-pill status-${t.status}" data-id="${t.id}" data-status="${t.status}" title="Cambiar estado">${STATUS_LABELS[t.status] || t.status}</button>
       </div>
       <div class="tc-bottom">
         <div class="tc-meta">
-          ${t.assigned_label ? `<span>👤 ${esc(t.assigned_label)}</span>` : ''}
-          ${t.remind_at ? `<span class="${t.status !== 'done' && new Date(t.remind_at) < new Date() ? 'overdue' : ''}">⏰ ${fmtDT(t.remind_at)}</span>` : ''}
-          ${t.due_at ? `<span class="${t.status !== 'done' && new Date(t.due_at) < new Date() ? 'overdue' : ''}">📅 ${fmtDT(t.due_at)}</span>` : ''}
+          ${t.assigned_label ? `<span>${IC.user} ${esc(t.assigned_label)}</span>` : ''}
+          ${t.remind_at ? `<span class="${t.status !== 'done' && new Date(t.remind_at) < new Date() ? 'overdue' : ''}">⏱ ${fmtDT(t.remind_at)}</span>` : ''}
+          ${t.due_at ? `<span class="${t.status !== 'done' && new Date(t.due_at) < new Date() ? 'overdue' : ''}">⌛ ${fmtDT(t.due_at)}</span>` : ''}
         </div>
         <div class="tc-actions">
-          ${t.anchored_message_id ? `<button class="task-goto-btn" data-conv="${t.conversation_id}" data-msg="${t.anchored_message_id}" title="Ir al mensaje">💬</button>` : ''}
-          <button class="task-edit-btn" data-id="${t.id}" title="Editar">✏️</button>
-          <button class="task-del-btn" data-id="${t.id}" title="Eliminar">🗑️</button>
+          ${t.anchored_message_id ? `<button class="task-goto-btn" data-conv="${t.conversation_id}" data-msg="${t.anchored_message_id}" title="Ir al mensaje">${IC.goto}</button>` : ''}
+          <button class="task-edit-btn" data-id="${t.id}" title="Editar">${IC.edit}</button>
+          <button class="task-del-btn" data-id="${t.id}" title="Eliminar" class="btn-danger">${IC.trash}</button>
         </div>
       </div>
     </div>`;
@@ -469,8 +483,8 @@ function renderAlerts() {
     return `
       <div class="alert-item" data-conv="${a.conversation_id || ''}">
         ${a.type === 'unanswered' ? `<button class="al-dismiss" data-conv="${a.conversation_id}" title="Descartar esta alerta">✕</button>` : ''}
-        <span class="al-client">${a.high_priority ? '🔴 ' : ''}${esc(a.client)}</span>
-        <span class="al-late">· ${a.type === 'due' ? '📅 límite' : a.type === 'unanswered' ? '⚠️ sin responder' : '⏰ aviso'} hace ${late}</span>
+        <span class="al-client">${a.high_priority ? '<span class="prio-dot"></span> ' : ''}${esc(a.client)}</span>
+        <span class="al-late">· ${a.type === 'due' ? 'límite' : a.type === 'unanswered' ? 'sin responder' : 'aviso'} hace ${late}</span>
         <div class="al-text">${esc(truncate(a.text || '', 70))}</div>
       </div>`;
   }).join('');
@@ -513,7 +527,7 @@ function openTaskModal(ctx = {}) {
   const task = isEdit ? state.tasks.find(t => t.id === ctx.taskId) : null;
   const anchoredMsg = ctx.messageId ? state.messages.find(m => m.id === ctx.messageId) : null;
 
-  $('task-title').textContent = isEdit ? '✏️ Editar tarea' : '📌 Nueva tarea';
+  $('task-title').innerHTML = isEdit ? `${IC.edit} Editar tarea` : `${IC.pin} Nueva tarea`;
   $('task-save').textContent  = isEdit ? 'Guardar cambios' : 'Guardar tarea';
 
   const prev = $('task-anchored-preview');
@@ -656,15 +670,15 @@ function renderTasksScreen() {
     const overdueDue = t.due_at && new Date(t.due_at) < new Date() && t.status !== 'done';
     const resumen = esc(truncate(t.message_text || '', 80));
     return `<tr>
-      <td>${t.high_priority ? '🔴 ' : ''}${esc(t.client_label || '—')}</td>
+      <td>${t.high_priority ? '<span class="prio-dot"></span> ' : ''}${esc(t.client_label || '—')}</td>
       <td>${t.anchored_message_id ? `<span class="task-link" data-conv="${t.conversation_id}" data-msg="${t.anchored_message_id}" title="Ir al mensaje">${resumen}</span>` : resumen}</td>
       <td>${esc(t.assigned_label || '—')}</td>
       <td><button class="status-pill status-${t.status}" data-id="${t.id}" data-status="${t.status}">${STATUS_LABELS[t.status]}</button></td>
       <td>${t.remind_at ? fmtDT(t.remind_at) : '—'}</td>
       <td class="${overdueDue ? 'overdue' : ''}">${t.due_at ? fmtDT(t.due_at) : '—'}</td>
       <td class="row-actions">
-        <button class="task-edit-btn" data-id="${t.id}" title="Editar">✏️</button>
-        <button class="task-del-btn" data-id="${t.id}" title="Eliminar">🗑️</button>
+        <button class="task-edit-btn" data-id="${t.id}" title="Editar">${IC.edit}</button>
+        <button class="task-del-btn btn-danger" data-id="${t.id}" title="Eliminar">${IC.trash}</button>
       </td>
     </tr>`;
   }).join('') : '<tr><td colspan="7" style="text-align:center;color:#999;padding:1.5rem;">No hay tareas que coincidan</td></tr>';
@@ -1039,11 +1053,11 @@ function renderEmployees() {
       <td>${esc(u.position_name || '—')}</td>
       <td>${esc(u.username)}</td>
       <td><span class="role-badge role-${u.role}">${ROLE_LABELS[u.role] || u.role}</span></td>
-      <td>${u.active ? '🟢 Activo' : '⚪ Inactivo'}</td>
+      <td><span class="status-dot ${u.active ? 'active' : 'inactive'}"></span> ${u.active ? 'Activo' : 'Inactivo'}</td>
       <td class="row-actions">
-        <button class="emp-edit-btn" data-id="${u.id}" title="Editar">✏️</button>
-        <button class="emp-key-btn" data-id="${u.id}" title="Resetear contraseña">🔑</button>
-        <button class="emp-toggle-btn" data-id="${u.id}" title="${u.active ? 'Desactivar' : 'Reactivar'}">${u.active ? '🗑️' : '♻️'}</button>
+        <button class="emp-edit-btn" data-id="${u.id}" title="Editar">${IC.edit}</button>
+        <button class="emp-key-btn" data-id="${u.id}" title="Resetear contraseña">${IC.key}</button>
+        <button class="emp-toggle-btn ${u.active ? 'btn-danger' : ''}" data-id="${u.id}" title="${u.active ? 'Desactivar' : 'Reactivar'}">${u.active ? IC.trash : IC.refresh}</button>
       </td>
     </tr>`;
   tbody.innerHTML = empState.employees.map(rowHtml).join('')
@@ -1054,11 +1068,11 @@ function renderEmployees() {
     <div class="task-card ${u.active ? '' : 'emp-inactive'}">
       <div class="tc-top"><strong>${esc((u.last_name ? u.last_name + ', ' : '') + u.first_name)}</strong>
         <span class="role-badge role-${u.role}">${ROLE_LABELS[u.role] || u.role}</span></div>
-      <div class="tc-meta"><span>${esc(u.position_name || '—')}</span><span>👤 ${esc(u.username)}</span><span>${u.active ? '🟢 Activo' : '⚪ Inactivo'}</span></div>
+      <div class="tc-meta"><span>${esc(u.position_name || '—')}</span><span>${IC.user} ${esc(u.username)}</span><span><span class="status-dot ${u.active ? 'active' : 'inactive'}"></span> ${u.active ? 'Activo' : 'Inactivo'}</span></div>
       <div class="tc-actions">
-        <button class="emp-edit-btn" data-id="${u.id}">✏️</button>
-        <button class="emp-key-btn" data-id="${u.id}">🔑</button>
-        <button class="emp-toggle-btn" data-id="${u.id}">${u.active ? '🗑️' : '♻️'}</button>
+        <button class="emp-edit-btn" data-id="${u.id}">${IC.edit}</button>
+        <button class="emp-key-btn" data-id="${u.id}">${IC.key}</button>
+        <button class="emp-toggle-btn ${u.active ? 'btn-danger' : ''}" data-id="${u.id}">${u.active ? IC.trash : IC.refresh}</button>
       </div>
     </div>`).join('');
 
@@ -1110,7 +1124,7 @@ function collectGroups() {
 function openEmpModal(id) {
   empState.editingId = id;
   const u = id ? empState.employees.find(e => e.id === id) : null;
-  $('emp-title').textContent = u ? '✏️ Editar empleado' : '👥 Añadir empleado';
+  $('emp-title').innerHTML = u ? `${IC.edit} Editar empleado` : `${IC.users} Añadir empleado`;
   $('emp-save').textContent  = u ? 'Guardar cambios' : 'Guardar empleado';
   $('emp-save').style.display = '';
   $('emp-first').value = u ? u.first_name : '';
@@ -1547,7 +1561,7 @@ function renderContacts() {
 function openCtModal(id) {
   ctState.editingId = id || null;
   const isNew = !id;
-  $('ct-title').textContent = isNew ? '👤 Nuevo contacto' : '✏️ Editar contacto';
+  $('ct-title').innerHTML = isNew ? `${IC.user} Nuevo contacto` : `${IC.edit} Editar contacto`;
   const c = isNew ? {} : (ctState.contacts.find(x => x.id === id) || {});
   $('ct-name').value = c.name || '';
   $('ct-phone').value = c.phone || '';
