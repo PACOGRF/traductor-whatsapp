@@ -2,6 +2,16 @@
 const authToken = localStorage.getItem('chatlink_token');
 if (!authToken) window.location.href = '/login.html';
 
+// Extraer user_id del JWT si no está guardado en localStorage (sesiones antiguas)
+(function() {
+  if (authToken && !Number(localStorage.getItem('chatlink_user_id'))) {
+    try {
+      const payload = JSON.parse(atob(authToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (payload.user_id) localStorage.setItem('chatlink_user_id', payload.user_id);
+    } catch (_) {}
+  }
+})();
+
 /* ── Estado de la aplicación ────────────────────────── */
 const state = {
   conversations: [],
