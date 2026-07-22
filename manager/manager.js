@@ -307,6 +307,19 @@ function renderMessages() {
 
     const readReceipt = isMine
       ? `<span class="msg-read-receipt" data-msg-id="${m.id}" title=""></span>` : '';
+
+    let ackHtml = '';
+    if (m.requires_ack) {
+      if (isMine) {
+        const cnt = Number(m.ack_count || 0);
+        ackHtml = `<span class="msg-ack-count" data-mid="${m.id}" data-count="${cnt}">${cnt} confirmaci${cnt === 1 ? 'ón' : 'ones'}</span>`;
+      } else if (m.acked_by_me) {
+        ackHtml = `<span class="msg-ack-done">Confirmado ✓</span>`;
+      } else {
+        ackHtml = `<button class="msg-ack-btn" data-mid="${m.id}">✓ Leído y entendido</button>`;
+      }
+    }
+
     return `${dateDivider}
       <div class="msg-bubble ${cls}${isInternal ? ' internal' : ''}" data-msg-id="${m.id}">
         ${senderLabel}
@@ -314,6 +327,7 @@ function renderMessages() {
         ${mediaHtml}
         ${mainText ? `<div class="msg-original">${mainText}</div>` : ''}
         ${subText}
+        ${ackHtml}
         <span class="msg-time">${time}${readReceipt}</span>
       </div>${notesHtml}`;
   }).join('') + renderScheduledHtml();
@@ -336,6 +350,7 @@ function renderMessages() {
     btn.addEventListener('click', () => cancelScheduled(Number(btn.dataset.id)))
   );
 
+  wireMessageAckEvents();
   messagesArea.scrollTop = messagesArea.scrollHeight;
 }
 
@@ -764,6 +779,14 @@ async function selectConversation(id) {
   $('attach-btn').disabled = readonly;
   msgInput.placeholder = conv.channel === 'internal' ? 'Mensaje interno…' : 'Escribe en español…';
 
+  // Botón de confirmacion "leido y entendido": solo en chats internos
+  const ackToggleBtn = $('ack-toggle-btn');
+  if (ackToggleBtn) {
+    ackToggleBtn.classList.toggle('hidden', conv.channel !== 'internal');
+    ackToggleBtn.classList.remove('active');
+  }
+  msgRequiresAck = false;
+
   // Mostrar chat, ocultar bienvenida
   welcomeScreen.style.display = 'none';
   messagesArea.style.display  = 'flex';
@@ -800,7 +823,10 @@ async function sendReply() {
 
   const conv = state.conversations.find(c => c.id === state.activeConvId);
   if (conv?.channel === 'internal') {
-    socket.emit('internal_message', { conversationId: state.activeConvId, text });
+    socket.emit('internal_message', { conversationId: state.activeConvId, text, requiresAck: msgRequiresAck });
+    msgRequiresAck = false;
+    const ackBtn = $('ack-toggle-btn');
+    if (ackBtn) ackBtn.classList.remove('active');
   } else {
     const langOverride = $('lang-override').value;
     const phoneNumberId = conv?.phone_number_id || window.CHATLINK_PHONE_NUMBER_ID || null;
@@ -2036,6 +2062,53 @@ $('conv-internal-btn').addEventListener('click', openIntConvModal);
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !$('intconv-modal').classList.contains('hidden')) {
     closeIntConvModal();
+  }
+});
+
+// ============ CONFIRMACION "LEIDO Y ENTENDIDO" ============
+
+let msgRequiresAck = false;
+
+$('ack-toggle-btn').addEventListener('click', () => {
+  msgRequiresAck = !msgRequiresAck;
+  $('ack-toggle-btn').classList.toggle('active', msgRequiresAck);
+});
+
+async function ackMessage(msgId) {
+  try {
+    await apiFetch(`/api/messages/${msgId}/ack`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    const btn = document.querySelector(`.msg-ack-btn[data-mid="${msgId}"]`);
+    if (btn) btn.outerHTML = '<span class="msg-ack-done">Confirmado ✓</span>';
+  } catch (err) {
+    showToast('Error al confirmar: ' + (err.message || ''));
+  }
+}
+
+function wireMessageAckEvents() {
+  document.querySelectorAll('.msg-ack-btn').forEach(btn => {
+    btn.addEventListener('click', () => ackMessage(Number(btn.dataset.mid)));
+  });
+}
+
+socket.on('message_acked', ({ message_id, user_id, user_name }) => {
+  const countEl = document.querySelector(`.msg-ack-count[data-mid="${message_id}"]`);
+  if (countEl) {
+    const newCount = Number(countEl.dataset.count || 0) + 1;
+    countEl.dataset.count = newCount;
+    const prevNames = countEl.dataset.names || '';
+    const newNames = prevNames ? prevNames + ', ' + user_name : user_name;
+    countEl.dataset.names = newNames;
+    countEl.title = 'Confirmado por: ' + newNames;
+    countEl.textContent = newCount + ' confirmaci' + (newCount === 1 ? 'ón' : 'ones');
+  }
+  const myId = Number(localStorage.getItem('chatlink_user_id'));
+  if (user_id === myId) {
+    const btn = document.querySelector(`.msg-ack-btn[data-mid="${message_id}"]`);
+    if (btn) btn.outerHTML = '<span class="msg-ack-done">Confirmado ✓</span>';
   }
 });
 

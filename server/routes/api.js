@@ -1238,4 +1238,42 @@ router.post('/push-unsubscribe', (req, res) => {
   res.json({ ok: true });
 });
 
+// ── CONFIRMACIÓN "LEÍDO Y ENTENDIDO" EN MENSAJES (Sprint 5 ext.) ──
+
+router.post('/messages/:id/ack', async (req, res) => {
+  try {
+    const userId    = req.user?.user_id;
+    const companyId = req.user?.company_id || 1;
+    await db.run(
+      'INSERT INTO message_acks (message_id, user_id, company_id) VALUES (?, ?, ?) ON CONFLICT DO NOTHING',
+      [req.params.id, userId, companyId]
+    );
+    const user = await db.get('SELECT first_name, last_name FROM users WHERE id = ?', [userId]);
+    const userName = user ? `${user.first_name} ${user.last_name || ''}`.trim() : '';
+    const io = req.app.get('io');
+    if (io) io.emit('message_acked', {
+      message_id: Number(req.params.id),
+      user_id: userId,
+      user_name: userName,
+      acked_at: new Date().toISOString(),
+    });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.get('/conversations/:id/message-acks', async (req, res) => {
+  try {
+    const rows = await db.all(
+      `SELECT ma.message_id, ma.user_id, ma.acked_at,
+              u.first_name, u.last_name
+       FROM message_acks ma
+       JOIN users u ON u.id = ma.user_id
+       WHERE ma.message_id IN (SELECT id FROM messages WHERE conversation_id = ?)
+       ORDER BY ma.acked_at ASC`,
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;

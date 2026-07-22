@@ -63,7 +63,7 @@ function registerChatHandlers(io, app) {
     });
 
     // Mensaje en chat interno (no traduce, no envía por canal externo)
-    socket.on('internal_message', async ({ conversationId, text }) => {
+    socket.on('internal_message', async ({ conversationId, text, requiresAck }) => {
       if (!text || !text.trim()) return;
       try {
         const member = await db.get(
@@ -73,9 +73,9 @@ function registerChatHandlers(io, app) {
         if (!member) return socket.emit('error', { msg: 'No perteneces a este chat' });
 
         await db.run(
-          `INSERT INTO messages (conversation_id, direction, original_text, translated_text, sender_user_id)
-           VALUES (?, 'outgoing', ?, ?, ?)`,
-          [conversationId, text.trim(), text.trim(), socket.user?.user_id || null]
+          `INSERT INTO messages (conversation_id, direction, original_text, translated_text, sender_user_id, requires_ack)
+           VALUES (?, 'outgoing', ?, ?, ?, ?)`,
+          [conversationId, text.trim(), text.trim(), socket.user?.user_id || null, requiresAck ? true : false]
         );
         await db.run(
           'UPDATE conversations SET updated_at = NOW() WHERE id = ?',

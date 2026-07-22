@@ -1629,3 +1629,57 @@ body {
   padding: 4px 0;
 }
 #intconv-selected-count { font-weight: 700; color: var(--green-dark); }
+
+/* ═══════════ ACK "LEIDO Y ENTENDIDO" ═══════════ */
+
+#ack-toggle-btn {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 2px solid #ccc;
+  background: white;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+  color: #888;
+}
+#ack-toggle-btn svg { width: 16px; height: 16px; }
+#ack-toggle-btn:hover { border-color: var(--green-mid); color: var(--green-mid); }
+#ack-toggle-btn.active {
+  background: var(--green-dark);
+  border-color: var(--green-dark);
+  color: white;
+}
+#ack-toggle-btn.hidden { display: none; }
+
+.msg-ack-btn {
+  display: block;
+  margin: 6px 0 2px;
+  background: var(--green-mid);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.msg-ack-btn:hover { background: var(--green-dark); }
+
+.msg-ack-done {
+  display: block;
+  margin: 6px 0 2px;
+  font-size: 0.76rem;
+  color: #888;
+  font-style: italic;
+}
+
+.msg-ack-count {
+  display: block;
+  margin: 4px 0 2px;
+  font-size: 0.74rem;
+  color: var(--green-dark);
+  font-weight: 600;
+  cursor: default;
+}
