@@ -1098,19 +1098,24 @@ function setActiveNav(id) {
   if (el) el.classList.add('active');
 }
 $('nav-conversaciones').addEventListener('click', () => {
-  closeTasksScreen(); closeEmployeesScreen(); closeContactsScreen(); setActiveNav('nav-conversaciones');
+  closeTasksScreen(); closeEmployeesScreen(); closeContactsScreen(); closeConfigScreen(); setActiveNav('nav-conversaciones');
 });
 $('nav-tareas').addEventListener('click', () => {
-  closeEmployeesScreen(); closeContactsScreen(); openTasksScreen(); setActiveNav('nav-tareas');
+  closeEmployeesScreen(); closeContactsScreen(); closeConfigScreen(); openTasksScreen(); setActiveNav('nav-tareas');
 });
 $('nav-empleados').addEventListener('click', () => {
-  closeTasksScreen(); closeContactsScreen(); openEmployeesScreen(); setActiveNav('nav-empleados');
+  closeTasksScreen(); closeContactsScreen(); closeConfigScreen(); openEmployeesScreen(); setActiveNav('nav-empleados');
 });
 $('nav-contactos').addEventListener('click', () => {
-  closeTasksScreen(); closeEmployeesScreen(); openContactsScreen(); setActiveNav('nav-contactos');
+  closeTasksScreen(); closeEmployeesScreen(); closeConfigScreen(); openContactsScreen(); setActiveNav('nav-contactos');
 });
-$('nav-configuracion').addEventListener('click', () => showToast('La pantalla CONFIGURACIÓN llegará más adelante 😉'));
-if (localStorage.getItem('chatlink_role') === 'manager') $('nav-empleados').classList.remove('hidden');
+$('nav-configuracion').addEventListener('click', () => {
+  closeTasksScreen(); closeEmployeesScreen(); closeContactsScreen(); openConfigScreen(); setActiveNav('nav-configuracion');
+});
+if (localStorage.getItem('chatlink_role') === 'manager') {
+  $('nav-empleados').classList.remove('hidden');
+  $('nav-configuracion').classList.remove('hidden');
+}
 
 /* ── Pantalla EMPLEADOS (Sprint 2, solo GESTOR) ──────── */
 const ROLE_LABELS = { manager: 'Gestor', supervisor: 'Supervisor', employee: 'Empleado' };
@@ -2103,6 +2108,206 @@ function wireMessageAckEvents() {
     btn.addEventListener('click', () => ackMessage(Number(btn.dataset.mid)));
   });
 }
+
+// ============ SPRINT 6: PANTALLA CONFIGURACIÓN ============
+
+function openConfigScreen() {
+  $('config-screen').classList.remove('hidden');
+  loadConfigData();
+}
+
+function closeConfigScreen() {
+  $('config-screen').classList.add('hidden');
+}
+
+$('config-screen-close').addEventListener('click', () => {
+  closeConfigScreen();
+  setActiveNav('nav-conversaciones');
+});
+
+async function loadConfigData() {
+  const [company, tgStatus, positions, groups] = await Promise.all([
+    apiFetch('/api/company'),
+    apiFetch('/api/telegram/config'),
+    apiFetch('/api/positions'),
+    apiFetch('/api/contact-groups'),
+  ]);
+
+  // Empresa
+  if (company) {
+    $('cfg-company-name').value = company.name || '';
+    $('cfg-alert-hours').value = company.alert_hours || 4;
+  }
+
+  // Telegram
+  const tgBar = $('cfg-tg-status-bar');
+  if (tgStatus?.configured) {
+    tgBar.innerHTML = `<div class="cfg-tg-ok">✅ Bot conectado: <strong>@${esc(tgStatus.bot_username || '')}</strong> — <a href="${esc(tgStatus.link || '')}" target="_blank" rel="noopener">${esc(tgStatus.link || '')}</a></div>`;
+    $('cfg-tg-token').value = '';
+    $('cfg-tg-token').placeholder = 'Pega aquí para cambiar el bot…';
+  } else {
+    tgBar.innerHTML = '<div class="cfg-tg-warn">⚠️ Sin bot de Telegram configurado</div>';
+    $('cfg-tg-token').placeholder = '1234567890:AAF…';
+  }
+
+  // Grupos
+  renderCfgGroups(Array.isArray(groups) ? groups : []);
+
+  // Puestos
+  renderCfgPositions(Array.isArray(positions) ? positions : []);
+}
+
+function renderCfgGroups(groups) {
+  const list = $('cfg-groups-list');
+  if (!groups.length) {
+    list.innerHTML = '<div class="cfg-empty">Sin grupos aún. Añade el primero abajo.</div>';
+    return;
+  }
+  list.innerHTML = groups.map(g => `
+    <div class="cfg-item" data-id="${g.id}">
+      <input class="cfg-item-input" type="text" value="${esc(g.name)}" data-orig="${esc(g.name)}">
+      <button class="cfg-item-save btn-small" data-id="${g.id}" data-type="group">Guardar</button>
+      <button class="cfg-item-del btn-small btn-danger" data-id="${g.id}" data-type="group" title="Eliminar">✕</button>
+    </div>`).join('');
+  wireConfigListEvents(list, 'group');
+}
+
+function renderCfgPositions(positions) {
+  const list = $('cfg-positions-list');
+  if (!positions.length) {
+    list.innerHTML = '<div class="cfg-empty">Sin puestos aún. Añade el primero abajo.</div>';
+    return;
+  }
+  list.innerHTML = positions.map(p => `
+    <div class="cfg-item" data-id="${p.id}">
+      <input class="cfg-item-input" type="text" value="${esc(p.name)}" data-orig="${esc(p.name)}">
+      <button class="cfg-item-save btn-small" data-id="${p.id}" data-type="position">Guardar</button>
+      <button class="cfg-item-del btn-small btn-danger" data-id="${p.id}" data-type="position" title="Eliminar">✕</button>
+    </div>`).join('');
+  wireConfigListEvents(list, 'position');
+}
+
+function wireConfigListEvents(container, type) {
+  const endpoint = type === 'group' ? 'contact-groups' : 'positions';
+  container.querySelectorAll('.cfg-item-save').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const row = btn.closest('.cfg-item');
+      const input = row.querySelector('.cfg-item-input');
+      const name = input.value.trim();
+      if (!name) return;
+      const r = await apiFetch(`/api/${endpoint}/${btn.dataset.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (r?.ok) { input.dataset.orig = name; showToast('Guardado'); }
+      else showToast(r?.error || 'Error al guardar');
+    });
+  });
+  container.querySelectorAll('.cfg-item-del').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('¿Eliminar? Esta acción no se puede deshacer.')) return;
+      const r = await apiFetch(`/api/${endpoint}/${btn.dataset.id}`, { method: 'DELETE' });
+      if (r?.ok) {
+        btn.closest('.cfg-item').remove();
+        showToast('Eliminado');
+      } else showToast(r?.error || 'Error al eliminar');
+    });
+  });
+}
+
+// Guardar datos de empresa
+$('cfg-company-save').addEventListener('click', async () => {
+  const name = $('cfg-company-name').value.trim();
+  const alert_hours = Number($('cfg-alert-hours').value) || 4;
+  const r = await apiFetch('/api/company', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, alert_hours }),
+  });
+  if (r?.ok) showToast('Datos de empresa guardados');
+  else showToast(r?.error || 'Error al guardar');
+});
+
+// Guardar token de Telegram
+$('cfg-tg-save').addEventListener('click', async () => {
+  const token = $('cfg-tg-token').value.trim();
+  if (!token) { showToast('Pega el token del bot antes de conectar'); return; }
+  const result = $('cfg-tg-result');
+  result.textContent = 'Conectando…';
+  result.classList.remove('hidden');
+  const r = await apiFetch('/api/telegram/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ bot_token: token }),
+  });
+  if (r?.ok) {
+    result.innerHTML = `✅ Bot <strong>@${esc(r.bot_username)}</strong> conectado. Enlace: <a href="${esc(r.link)}" target="_blank">${esc(r.link)}</a>`;
+    $('cfg-tg-status-bar').innerHTML = `<div class="cfg-tg-ok">✅ Bot conectado: <strong>@${esc(r.bot_username)}</strong></div>`;
+    $('cfg-tg-token').value = '';
+  } else {
+    result.textContent = '❌ ' + (r?.error || 'Error al conectar el bot');
+  }
+});
+
+// Añadir grupo
+$('cfg-group-add').addEventListener('click', async () => {
+  const input = $('cfg-group-new');
+  const name = input.value.trim();
+  if (!name) return;
+  const r = await apiFetch('/api/contact-groups', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (r?.id) {
+    input.value = '';
+    const groups = await apiFetch('/api/contact-groups');
+    renderCfgGroups(Array.isArray(groups) ? groups : []);
+    showToast('Grupo añadido');
+  } else showToast(r?.error || 'Error al añadir grupo');
+});
+$('cfg-group-new').addEventListener('keydown', e => { if (e.key === 'Enter') $('cfg-group-add').click(); });
+
+// Añadir puesto
+$('cfg-position-add').addEventListener('click', async () => {
+  const input = $('cfg-position-new');
+  const name = input.value.trim();
+  if (!name) return;
+  const r = await apiFetch('/api/positions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (r?.id) {
+    input.value = '';
+    const positions = await apiFetch('/api/positions');
+    renderCfgPositions(Array.isArray(positions) ? positions : []);
+    showToast('Puesto añadido');
+  } else showToast(r?.error || 'Error al añadir puesto');
+});
+$('cfg-position-new').addEventListener('keydown', e => { if (e.key === 'Enter') $('cfg-position-add').click(); });
+
+// Cambiar contraseña propia
+$('cfg-pwd-save').addEventListener('click', async () => {
+  const old_password = $('cfg-pwd-old').value;
+  const new_password = $('cfg-pwd-new').value;
+  const confirm     = $('cfg-pwd-confirm').value;
+  if (!old_password || !new_password) { showToast('Rellena todos los campos'); return; }
+  if (new_password !== confirm) { showToast('Las contraseñas nuevas no coinciden'); return; }
+  if (new_password.length < 8) { showToast('La contraseña debe tener al menos 8 caracteres'); return; }
+  const r = await fetch('/auth/change-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+    body: JSON.stringify({ old_password, new_password }),
+  }).then(res => res.json()).catch(() => null);
+  if (r?.ok) {
+    $('cfg-pwd-old').value = '';
+    $('cfg-pwd-new').value = '';
+    $('cfg-pwd-confirm').value = '';
+    showToast('Contraseña cambiada correctamente');
+  } else showToast(r?.error || 'Error al cambiar la contraseña');
+});
 
 socket.on('message_acked', ({ message_id, user_id, user_name }) => {
   const countEl = document.querySelector(`.msg-ack-count[data-mid="${message_id}"]`);

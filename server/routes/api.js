@@ -1276,4 +1276,89 @@ router.get('/conversations/:id/message-acks', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── CONFIGURACIÓN (Sprint 6, solo GESTOR) ─────────────
+
+router.get('/company', async (req, res) => {
+  try {
+    const c = await db.get('SELECT name, alert_hours FROM companies WHERE id = ?', [req.user?.company_id || 1]);
+    res.json(c || { name: '', alert_hours: 4 });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/company', requireRole('manager'), async (req, res) => {
+  try {
+    const { name, alert_hours } = req.body;
+    const companyId = req.user?.company_id || 1;
+    await db.run('UPDATE companies SET name = ?, alert_hours = ? WHERE id = ?',
+      [(name || '').trim() || null, Number(alert_hours) || 4, companyId]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/positions', requireRole('manager'), async (req, res) => {
+  try {
+    const name = (req.body.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Nombre requerido' });
+    const companyId = req.user?.company_id || 1;
+    const existing = await db.get('SELECT id FROM positions WHERE company_id = ? AND LOWER(name) = LOWER(?)', [companyId, name]);
+    if (existing) return res.status(409).json({ error: 'Ya existe ese puesto' });
+    await db.run('INSERT INTO positions (company_id, name) VALUES (?, ?)', [companyId, name]);
+    const p = await db.get('SELECT id FROM positions WHERE company_id = ? AND LOWER(name) = LOWER(?)', [companyId, name]);
+    res.json(p);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/positions/:id', requireRole('manager'), async (req, res) => {
+  try {
+    const name = (req.body.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Nombre requerido' });
+    await db.run('UPDATE positions SET name = ? WHERE id = ? AND company_id = ?',
+      [name, req.params.id, req.user?.company_id || 1]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/positions/:id', requireRole('manager'), async (req, res) => {
+  try {
+    const companyId = req.user?.company_id || 1;
+    const inUse = await db.get('SELECT 1 FROM users WHERE position_id = ? AND company_id = ?', [req.params.id, companyId]);
+    if (inUse) return res.status(409).json({ error: 'Hay empleados asignados a este puesto. Cámbialo antes de borrar.' });
+    await db.run('DELETE FROM positions WHERE id = ? AND company_id = ?', [req.params.id, companyId]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/contact-groups', requireRole('manager'), async (req, res) => {
+  try {
+    const name = (req.body.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Nombre requerido' });
+    const companyId = req.user?.company_id || 1;
+    const existing = await db.get('SELECT id FROM contact_groups WHERE company_id = ? AND LOWER(name) = LOWER(?)', [companyId, name]);
+    if (existing) return res.status(409).json({ error: 'Ya existe ese grupo' });
+    await db.run('INSERT INTO contact_groups (company_id, name) VALUES (?, ?)', [companyId, name]);
+    const g = await db.get('SELECT id FROM contact_groups WHERE company_id = ? AND LOWER(name) = LOWER(?)', [companyId, name]);
+    res.json(g);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.put('/contact-groups/:id', requireRole('manager'), async (req, res) => {
+  try {
+    const name = (req.body.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Nombre requerido' });
+    await db.run('UPDATE contact_groups SET name = ? WHERE id = ? AND company_id = ?',
+      [name, req.params.id, req.user?.company_id || 1]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete('/contact-groups/:id', requireRole('manager'), async (req, res) => {
+  try {
+    const companyId = req.user?.company_id || 1;
+    const inUse = await db.get('SELECT 1 FROM contacts WHERE group_id = ? AND company_id = ?', [req.params.id, companyId]);
+    if (inUse) return res.status(409).json({ error: 'Hay contactos en este grupo. Muévelos antes de borrar.' });
+    await db.run('DELETE FROM contact_groups WHERE id = ? AND company_id = ?', [req.params.id, companyId]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;
