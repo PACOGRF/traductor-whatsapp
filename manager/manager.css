@@ -1774,6 +1774,19 @@ body {
 .cfg-item-input:focus { border-color: var(--green-mid); }
 .cfg-empty { font-size: 0.82rem; color: #aaa; padding: 8px 0; }
 
+/* Canales por departamento */
+.cfg-channel-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 0; border-bottom: 1px solid #f0f0f0; flex-wrap: wrap;
+}
+.cfg-channel-row:last-child { border-bottom: none; }
+.cfg-channel-name { font-weight: 600; font-size: 0.85rem; min-width: 90px; }
+.cfg-channel-url {
+  flex: 1; font-size: 0.75rem; color: #555; background: #f5f5f5;
+  padding: 3px 7px; border-radius: 5px; word-break: break-all;
+}
+.cfg-channel-copy { flex-shrink: 0; }
+
 .cfg-add-row {
   display: flex; gap: 8px; margin-top: 4px;
 }

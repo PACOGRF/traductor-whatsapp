@@ -31,7 +31,7 @@ function convAccess(vis, conv) {
   if (conv.contact_id && vis.exceptions.has(conv.contact_id)) {
     return vis.exceptions.get(conv.contact_id) === 'deny' ? 'none' : 'reply';
   }
-  const groupId = conv.contact_group_id || null;
+  const groupId = conv.group_id || conv.contact_group_id || null;
   if (!groupId) return 'reply';                       // sin grupo: visible (V1)
   if (!vis.groups.has(groupId)) return 'none';
   return vis.groups.get(groupId) ? 'reply' : 'read';

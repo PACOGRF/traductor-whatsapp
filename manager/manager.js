@@ -2250,6 +2250,9 @@ async function loadConfigData() {
   // Grupos
   renderCfgGroups(Array.isArray(groups) ? groups : []);
 
+  // Canales por departamento
+  renderCfgChannels(Array.isArray(groups) ? groups : [], tgStatus?.bot_username);
+
   // Puestos
   renderCfgPositions(Array.isArray(positions) ? positions : []);
 }
@@ -2267,6 +2270,36 @@ function renderCfgGroups(groups) {
       <button class="cfg-item-del btn-small btn-danger" data-id="${g.id}" data-type="group" title="Eliminar">✕</button>
     </div>`).join('');
   wireConfigListEvents(list, 'group');
+}
+
+function renderCfgChannels(groups, botUsername) {
+  const list = $('cfg-channels-list');
+  if (!botUsername) {
+    list.innerHTML = '<div class="cfg-empty">Configura primero el bot de Telegram para ver los enlaces.</div>';
+    return;
+  }
+  if (!groups.length) {
+    list.innerHTML = '<div class="cfg-empty">Añade grupos de clientes para generar sus canales.</div>';
+    return;
+  }
+  list.innerHTML = groups.map(g => {
+    const url = `https://t.me/${esc(botUsername)}?start=g${g.id}`;
+    return `<div class="cfg-channel-row">
+      <span class="cfg-channel-name">${esc(g.name)}</span>
+      <code class="cfg-channel-url">${esc(url)}</code>
+      <button class="cfg-channel-copy btn-small" data-url="${esc(url)}" title="Copiar enlace">📋 Copiar</button>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.cfg-channel-copy').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.url);
+        showToast('Enlace copiado ✓');
+      } catch {
+        showToast('No se pudo copiar; selecciona el texto manualmente');
+      }
+    });
+  });
 }
 
 function renderCfgPositions(positions) {

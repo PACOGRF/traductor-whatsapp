@@ -963,6 +963,13 @@ router.post('/contacts', async (req, res) => {
         'UPDATE conversations SET contact_id = ?, pending_contact = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [contact.id, conversation_id]
       );
+      // Propagar grupo del contacto a la conversación si no tiene uno ya
+      if (contact.group_id) {
+        await db.run(
+          'UPDATE conversations SET group_id = COALESCE(group_id, ?) WHERE id = ?',
+          [contact.group_id, conversation_id]
+        );
+      }
     }
 
     const { logAudit } = require('../services/audit');

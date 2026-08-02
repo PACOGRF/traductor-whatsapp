@@ -88,10 +88,17 @@ router.post('/telegram/:companyId', express.json(), async (req, res) => {
     // no se guardan ni se pasan al detector de idioma (falseaba el idioma)
     const isCommand = body.startsWith('/');
 
-    // Deep link de invitación: /start c{contactId} — llegó por enlace del gestor
+    // Deep link de contacto: /start c{contactId}
     const deepLinkMatch = body.match(/^\/start c(\d+)$/i);
     if (deepLinkMatch) {
       await handleDeepLinkContact(req.app, company, conv, Number(deepLinkMatch[1]), isNewConversation);
+      return;
+    }
+
+    // Deep link de departamento: /start g{groupId}
+    const deepLinkGroupMatch = body.match(/^\/start g(\d+)$/i);
+    if (deepLinkGroupMatch) {
+      await handleDeepLinkGroup(req.app, company, conv, Number(deepLinkGroupMatch[1]), isNewConversation);
       return;
     }
 
@@ -349,6 +356,51 @@ async function handleIncomingFile(app, company, conv, tgMsg, media, isNewConvers
   }
 }
 
+// Propaga el grupo del contacto a la conversación (solo si aún no tiene grupo asignado)
+async function propagateContactGroup(convId, contactId) {
+  const contact = await db.get('SELECT group_id FROM contacts WHERE id = ?', [contactId]);
+  if (contact?.group_id) {
+    await db.run(
+      'UPDATE conversations SET group_id = COALESCE(group_id, ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [contact.group_id, convId]
+    );
+  }
+}
+
+// El cliente llegó por enlace de departamento t.me/...?start=g{groupId}
+async function handleDeepLinkGroup(app, company, conv, groupId, isNewConversation) {
+  const group = await db.get(
+    'SELECT * FROM contact_groups WHERE id = ? AND company_id = ?',
+    [groupId, company.id]
+  );
+  if (!group) {
+    if (isNewConversation) {
+      await sendWelcome(app, company, conv);
+      await proposeNewClient(app, conv);
+    }
+    return;
+  }
+
+  // Etiquetar la conversación al grupo (COALESCE: no sobreescribe si ya tiene uno)
+  await db.run(
+    'UPDATE conversations SET group_id = COALESCE(group_id, ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [groupId, conv.id]
+  );
+  conv.group_id = conv.group_id || groupId;
+
+  const io = app.get('io');
+  if (io) io.emit('conv_group_assigned', { conversation_id: conv.id, group_id: groupId, group_name: group.name });
+
+  const { logAudit } = require('../services/audit');
+  await logAudit(company.id, null, 'conv_group_linked_via_deeplink',
+    { group_id: groupId, conversation_id: conv.id });
+
+  if (isNewConversation) {
+    await sendWelcome(app, company, conv);
+    await proposeNewClient(app, conv);
+  }
+}
+
 // El cliente llegó por enlace de invitación t.me/...?start=c{contactId}
 async function handleDeepLinkContact(app, company, conv, contactId, isNewConversation) {
   const contact = await db.get(
@@ -375,6 +427,7 @@ async function handleDeepLinkContact(app, company, conv, contactId, isNewConvers
     );
     conv.contact_id = contact.id;
     conv.guest_name = contact.name;
+    await propagateContactGroup(conv.id, contact.id);
   }
 
   const io = app.get('io');
