@@ -232,13 +232,12 @@ function renderConvList() {
         <div class="conv-info">
           <div class="conv-name">
             ${!isInternal && c.channel === 'telegram' ? `<span class="conv-channel" title="Telegram">${IC.telegram}</span>` : ''}${esc(displayName)}
+            ${!isInternal && c.group_name ? `<span class="conv-group-badge">${esc(c.group_name)}</span>` : ''}
             ${!isInternal && c.unanswered_hours ? `<span class="conv-unanswered" title="Sin responder">${IC.warn} ${c.unanswered_hours}h</span>` : ''}
             ${!isInternal && c.guest_language && c.guest_language !== 'es' ? `<span class="conv-lang">${langName(c.guest_language)}</span>` : ''}
             ${isInternal ? `<span class="conv-lang" title="Chat interno">${c.member_count || ''} miembros</span>` : ''}
           </div>
-          <div class="conv-preview">
-            ${!isInternal && c.group_name ? `<span class="conv-group-badge">${esc(c.group_name)}</span>` : ''}${esc(preview)}
-          </div>
+          <div class="conv-preview">${esc(preview)}</div>
         </div>
         <div class="conv-time">${time}</div>
       </div>`;
