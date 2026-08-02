@@ -51,6 +51,7 @@
       </div>
     </div>
   </aside>
+  <div class="resize-handle" id="resize-left"></div>
 
   <!-- ── Columna central: chat (50%) ── -->
   <main id="chat-panel">
@@ -123,6 +124,7 @@
       </div>
     </div>
   </main>
+  <div class="resize-handle" id="resize-right"></div>
 
   <!-- ── Columna derecha (D9): tareas de la conversación + alertas globales ── -->
   <aside id="tasks-panel">
@@ -709,6 +711,51 @@
     if (perm === 'granted') await subscribe();
     else notifBtn.textContent = '🔕 Permiso denegado';
   });
+})();
+</script>
+<script>
+(function () {
+  const app = document.getElementById('app');
+  const MIN = 180, MAX = 420;
+
+  function applyWidths() {
+    const left  = parseInt(localStorage.getItem('panel_left')  || '0', 10);
+    const right = parseInt(localStorage.getItem('panel_right') || '0', 10);
+    if (left  >= MIN) app.style.setProperty('--col-left',  left  + 'px');
+    if (right >= MIN) app.style.setProperty('--col-right', right + 'px');
+  }
+  applyWidths();
+
+  function initHandle(handleId, side) {
+    const handle = document.getElementById(handleId);
+    if (!handle) return;
+    handle.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      handle.classList.add('is-dragging');
+      const panelEl = side === 'left'
+        ? document.getElementById('sidebar')
+        : document.getElementById('tasks-panel');
+      const startX = e.clientX;
+      const startW = panelEl.offsetWidth;
+
+      function onMove(e) {
+        const delta = side === 'left' ? e.clientX - startX : startX - e.clientX;
+        const newW  = Math.max(MIN, Math.min(MAX, startW + delta));
+        app.style.setProperty('--col-' + side, newW + 'px');
+        localStorage.setItem('panel_' + side, newW);
+      }
+      function onUp() {
+        handle.classList.remove('is-dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+
+  initHandle('resize-left',  'left');
+  initHandle('resize-right', 'right');
 })();
 </script>
 </body>

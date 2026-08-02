@@ -34,10 +34,22 @@ body {
 /* ── Layout: 3 columnas en escritorio ────────────────── */
 #app {
   display: grid;
-  grid-template-columns: 25% 50% 25%;
+  grid-template-columns: var(--col-left, 25%) 4px 1fr 4px var(--col-right, 25%);
   grid-template-rows: 1fr;
   height: 100dvh;
   overflow: hidden;
+}
+
+.resize-handle {
+  background: var(--border);
+  cursor: col-resize;
+  user-select: none;
+  transition: background 0.15s;
+  z-index: 5;
+}
+.resize-handle:hover,
+.resize-handle.is-dragging {
+  background: var(--green-mid);
 }
 
 /* ── Sidebar izquierdo (conversaciones) ──────────────── */
@@ -878,6 +890,7 @@ body {
     position: relative;
     overflow: hidden;
   }
+  .resize-handle { display: none; }
 
   /* Sidebar: pantalla completa, visible por defecto */
   #sidebar {
