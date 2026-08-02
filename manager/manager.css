@@ -68,8 +68,7 @@ body {
 }
 
 #sidebar-header-top {
-  min-height: var(--header-h);
-  padding: 0.6rem 1rem;
+  padding: 0.5rem 1rem 0.3rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
