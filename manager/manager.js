@@ -24,6 +24,7 @@ const state = {
   alerts: [],             // alertas vencidas globales (columna derecha, abajo)
   notes: [],              // notas ancladas de la conversación activa (D8)
   convFilter: { type: null, groupId: null },
+  companyName: '',
 };
 let editingScheduledId = null;
 
@@ -59,8 +60,13 @@ const backBtn        = $('back-btn');
 const toast          = $('toast');
 const tasksList      = $('tasks-list');
 
+function idleHeader() {
+  const base = localStorage.getItem('chatlink_name') || 'Panel del Gestor';
+  return state.companyName ? `${base} · ${state.companyName}` : base;
+}
+
 // Personalizar header con el nombre del usuario desde el primer render
-chatGuestName.textContent = localStorage.getItem('chatlink_name') || 'Panel del Gestor';
+chatGuestName.textContent = idleHeader();
 
 /* ── Socket.io (con identidad: permisos por rol, Sprint 2) ── */
 const socket = io({ auth: { token: authToken } });
@@ -174,6 +180,12 @@ async function init() {
     modeBadge.textContent = health.mode === 'DEMO' ? 'MODO DEMO' : '● EN VIVO';
     modeBadge.style.background = health.mode === 'DEMO' ? '#ffc107' : '#a3b18a';
     modeBadge.style.color = health.mode === 'DEMO' ? '#333' : 'white';
+  }
+
+  const company = await apiFetch('/api/company');
+  if (company?.name) {
+    state.companyName = company.name;
+    chatGuestName.textContent = idleHeader();
   }
 
   await loadConversations();
@@ -1557,7 +1569,7 @@ backBtn.addEventListener('click', () => {
   }
   welcomeScreen.style.display = 'flex';
   messagesArea.style.display  = 'none';
-  chatGuestName.textContent   = localStorage.getItem('chatlink_name') || 'Panel del Gestor';
+  chatGuestName.textContent   = idleHeader();
   chatGuestMeta.textContent   = '';
   state.activeConvId = null;
   renderConvList();
