@@ -1440,9 +1440,13 @@ router.put('/contact-groups/:id', requireRole('manager'), async (req, res) => {
 router.delete('/contact-groups/:id', requireRole('manager'), async (req, res) => {
   try {
     const companyId = req.user?.company_id || 1;
-    const inUse = await db.get('SELECT 1 FROM contacts WHERE group_id = ? AND company_id = ?', [req.params.id, companyId]);
+    const groupId = req.params.id;
+    const inUse = await db.get('SELECT 1 FROM contacts WHERE group_id = ? AND company_id = ?', [groupId, companyId]);
     if (inUse) return res.status(409).json({ error: 'Hay contactos en este grupo. Muévelos antes de borrar.' });
-    await db.run('DELETE FROM contact_groups WHERE id = ? AND company_id = ?', [req.params.id, companyId]);
+    // Limpiar referencias antes de borrar (FK constraints)
+    await db.run('DELETE FROM user_group_visibility WHERE group_id = ?', [groupId]);
+    await db.run('UPDATE conversations SET group_id = NULL WHERE group_id = ? AND company_id = ?', [groupId, companyId]);
+    await db.run('DELETE FROM contact_groups WHERE id = ? AND company_id = ?', [groupId, companyId]);
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
