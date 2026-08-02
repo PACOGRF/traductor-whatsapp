@@ -88,6 +88,13 @@ router.post('/telegram/:companyId', express.json(), async (req, res) => {
     // no se guardan ni se pasan al detector de idioma (falseaba el idioma)
     const isCommand = body.startsWith('/');
 
+    // Deep link de invitación: /start c{contactId} — llegó por enlace del gestor
+    const deepLinkMatch = body.match(/^\/start c(\d+)$/i);
+    if (deepLinkMatch) {
+      await handleDeepLinkContact(req.app, company, conv, Number(deepLinkMatch[1]), isNewConversation);
+      return;
+    }
+
     if (!isCommand) {
       // Mismo flujo que WhatsApp: detectar idioma → traducir al español
       const { translatedText, detectedLanguage: detectedLang } = await translateWithDetection(body, 'es');
@@ -339,6 +346,48 @@ async function handleIncomingFile(app, company, conv, tgMsg, media, isNewConvers
   if (isNewConversation) {
     await sendWelcome(app, company, conv);
     await proposeNewClient(app, conv);
+  }
+}
+
+// El cliente llegó por enlace de invitación t.me/...?start=c{contactId}
+async function handleDeepLinkContact(app, company, conv, contactId, isNewConversation) {
+  const contact = await db.get(
+    'SELECT * FROM contacts WHERE id = ? AND company_id = ? AND deleted_at IS NULL',
+    [contactId, company.id]
+  );
+
+  if (!contact) {
+    // Contacto no encontrado o eliminado: flujo normal de /start
+    if (isNewConversation) {
+      await sendWelcome(app, company, conv);
+      await proposeNewClient(app, conv);
+    }
+    return;
+  }
+
+  // Vincular la conversación al contacto (aunque ya exista la conv)
+  if (conv.contact_id !== contact.id) {
+    await db.run(
+      `UPDATE conversations
+       SET contact_id = ?, pending_contact = NULL, guest_name = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [contact.id, contact.name, conv.id]
+    );
+    conv.contact_id = contact.id;
+    conv.guest_name = contact.name;
+  }
+
+  const io = app.get('io');
+  if (io) io.emit('contact_saved', { conversation_id: conv.id, name: contact.name, phone: contact.phone });
+
+  const { logAudit } = require('../services/audit');
+  await logAudit(company.id, null, 'contact_linked_via_deeplink',
+    { contact_id: contact.id, conversation_id: conv.id });
+
+  // Bienvenida solo si es la primera vez que escribe
+  if (isNewConversation) {
+    await sendWelcome(app, company, conv);
+    // No proposeNewClient — el contacto ya está vinculado
   }
 }
 
