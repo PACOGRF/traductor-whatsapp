@@ -21,6 +21,27 @@ async function sendPushNotification(app, payload) {
   }
 }
 
+async function sendPushToUsers(userIds, payload) {
+  if (!process.env.VAPID_PUBLIC_KEY || !userIds.length) return;
+  const qmarks = userIds.map(() => '?').join(',');
+  const rows = await db.all(
+    `SELECT user_id, subscription FROM push_subscriptions WHERE user_id IN (${qmarks})`,
+    userIds
+  );
+  for (const row of rows) {
+    try {
+      const sub = typeof row.subscription === 'string' ? JSON.parse(row.subscription) : row.subscription;
+      await webpush.sendNotification(sub, JSON.stringify(payload));
+    } catch (err) {
+      if (err.statusCode === 410) {
+        db.run('DELETE FROM push_subscriptions WHERE user_id = ?', [row.user_id]).catch(() => {});
+      } else {
+        console.error('Error push usuario:', err.message);
+      }
+    }
+  }
+}
+
 function registerChatHandlers(io, app) {
   io.on('connection', (socket) => {
     console.log('Panel del gestor conectado:', socket.id);
@@ -90,6 +111,25 @@ function registerChatHandlers(io, app) {
 
         const conv = await db.get('SELECT * FROM conversations WHERE id = ?', [conversationId]);
         io.emit('message_sent', { conversation: conv, message: msg });
+
+        // Push a los demás miembros del chat
+        const senderId = socket.user?.user_id;
+        const members = await db.all(
+          'SELECT user_id FROM conversation_participants WHERE conversation_id = ? AND user_id != ?',
+          [conversationId, senderId]
+        );
+        if (members.length) {
+          const senderName = msg.sender_name || 'Mensaje interno';
+          const bodyText = text.trim().length > 100 ? text.trim().slice(0, 100) + '…' : text.trim();
+          await sendPushToUsers(
+            members.map(m => m.user_id),
+            {
+              title: senderName,
+              body: bodyText,
+              tag: 'internal-' + conversationId,
+            }
+          );
+        }
       } catch (err) {
         console.error('Error en internal_message:', err);
         socket.emit('error', { msg: err.message });

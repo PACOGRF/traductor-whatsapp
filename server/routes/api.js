@@ -1310,18 +1310,39 @@ router.get('/vapid-public-key', (req, res) => {
   res.json({ key: process.env.VAPID_PUBLIC_KEY || '' });
 });
 
-// Guardar suscripción push del gestor
-router.post('/push-subscribe', (req, res) => {
+// Guardar suscripción push por usuario (upsert en BD)
+router.post('/push-subscribe', async (req, res) => {
   const subscription = req.body;
   if (!subscription || !subscription.endpoint) return res.status(400).json({ error: 'Suscripción inválida' });
-  req.app.set('pushSubscription', subscription);
-  res.json({ ok: true });
+  const userId = req.user.user_id;
+  const companyId = req.user.company_id;
+  try {
+    await db.run(
+      `INSERT INTO push_subscriptions (user_id, company_id, subscription, updated_at)
+       VALUES (?, ?, ?, NOW())
+       ON CONFLICT (user_id) DO UPDATE SET subscription = EXCLUDED.subscription, updated_at = NOW()`,
+      [userId, companyId, JSON.stringify(subscription)]
+    );
+    // Compatibilidad: también en memoria para notificaciones externas (gestor)
+    if (req.user.role === 'manager') req.app.set('pushSubscription', subscription);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Error guardando suscripción push:', err);
+    res.status(500).json({ error: 'Error guardando suscripción' });
+  }
 });
 
-// Eliminar suscripción push
-router.post('/push-unsubscribe', (req, res) => {
-  req.app.set('pushSubscription', null);
-  res.json({ ok: true });
+// Eliminar suscripción push del usuario actual
+router.post('/push-unsubscribe', async (req, res) => {
+  const userId = req.user.user_id;
+  try {
+    await db.run('DELETE FROM push_subscriptions WHERE user_id = ?', [userId]);
+    if (req.user.role === 'manager') req.app.set('pushSubscription', null);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Error eliminando suscripción push:', err);
+    res.status(500).json({ error: 'Error eliminando suscripción' });
+  }
 });
 
 // ── CONFIRMACIÓN "LEÍDO Y ENTENDIDO" EN MENSAJES (Sprint 5 ext.) ──

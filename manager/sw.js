@@ -38,7 +38,7 @@ self.addEventListener('push', event => {
       body: data.body,
       icon: '/icon-192.png',
       badge: '/icon-192.png',
-      tag: 'msg-' + (data.phone || Date.now()),
+      tag: data.tag || 'msg-' + (data.phone || Date.now()),
       renotify: true,
       vibrate: [200, 100, 200],
       data: { url: '/' },
