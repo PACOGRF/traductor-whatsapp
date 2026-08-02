@@ -1840,6 +1840,12 @@ body {
 }
 
 /* ── Botón ⚙ en header y modal cambiar contraseña (todos los roles) ── */
+#chat-user-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 #user-pwd-btn {
   background: none; border: none; color: rgba(255,255,255,0.75);
   cursor: pointer; padding: 4px; border-radius: 50%;
