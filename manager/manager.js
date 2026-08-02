@@ -236,7 +236,9 @@ function renderConvList() {
             ${!isInternal && c.guest_language && c.guest_language !== 'es' ? `<span class="conv-lang">${langName(c.guest_language)}</span>` : ''}
             ${isInternal ? `<span class="conv-lang" title="Chat interno">${c.member_count || ''} miembros</span>` : ''}
           </div>
-          <div class="conv-preview">${esc(preview)}</div>
+          <div class="conv-preview">
+            ${!isInternal && c.group_name ? `<span class="conv-group-badge">${esc(c.group_name)}</span>` : ''}${esc(preview)}
+          </div>
         </div>
         <div class="conv-time">${time}</div>
       </div>`;

@@ -122,6 +122,20 @@ body {
   vertical-align: middle;
 }
 
+.conv-group-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  background: var(--green-light);
+  color: var(--green-dark);
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-weight: 600;
+  margin-right: 5px;
+  vertical-align: middle;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .conv-empty {
   padding: 2rem 1rem;
   text-align: center;

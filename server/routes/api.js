@@ -19,6 +19,7 @@ router.get('/conversations', async (req, res) => {
     const userId = req.user?.user_id || null;
     const rows = await db.all(`
       SELECT c.*, ct.name AS contact_name, ct.phone AS contact_phone, ct.group_id AS contact_group_id,
+        cg.name AS group_name,
         cp.user_id AS is_member,
         cp.can_reply AS member_can_reply,
         (SELECT COUNT(*) FROM conversation_participants WHERE conversation_id = c.id) AS member_count,
@@ -27,6 +28,7 @@ router.get('/conversations', async (req, res) => {
         (SELECT m.direction FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_direction
       FROM conversations c
       LEFT JOIN contacts ct ON ct.id = c.contact_id
+      LEFT JOIN contact_groups cg ON cg.id = COALESCE(c.group_id, ct.group_id)
       LEFT JOIN conversation_participants cp ON cp.conversation_id = c.id AND cp.user_id = ?
       ORDER BY last_message_at DESC NULLS LAST
     `, [userId]);
