@@ -1871,7 +1871,7 @@ body {
 .creds-row { margin: 6px 0; font-size: 0.88rem; }
 .creds-row code {
   background: #f5f5f5; padding: 2px 8px; border-radius: 5px;
-  font-weight: 700; font-size: 0.9rem;
+  font-weight: 700; font-size: 0.9rem; color: #1a1a1a;
 }
 .creds-close-btn {
   float: right; background: none; border: none;
@@ -1879,7 +1879,7 @@ body {
 }
 @media (prefers-color-scheme: dark) {
   #creds-banner-box, #invite-banner-box { background: #1e1e1e; color: #eee; }
-  .creds-row code { background: #2a2a2a; }
+  .creds-row code { background: #2a2a2a; color: #f0f0f0; }
   .creds-close-btn { color: #aaa; }
   .invite-url-box { background: #2a2a2a; border-color: #444; color: #eee; }
 }
