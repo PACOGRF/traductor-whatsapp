@@ -38,6 +38,7 @@ const IC = {
   goto:     '<svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>',
   user:     '<svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
   users:    '<svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  link:     '<svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
 };
 
 /* ── Referencias DOM ────────────────────────────────── */
@@ -1156,6 +1157,7 @@ function renderEmployees() {
       <td><span class="status-dot ${u.active ? 'active' : 'inactive'}"></span> ${u.active ? 'Activo' : 'Inactivo'}</td>
       <td class="row-actions">
         <button class="emp-edit-btn" data-id="${u.id}" title="Editar">${IC.edit}</button>
+        <button class="emp-invite-btn" data-id="${u.id}" title="Enviar enlace de invitación">${IC.link}</button>
         <button class="emp-key-btn" data-id="${u.id}" title="Resetear contraseña">${IC.key}</button>
         <button class="emp-toggle-btn ${u.active ? 'btn-danger' : ''}" data-id="${u.id}" title="${u.active ? 'Desactivar' : 'Reactivar'}">${u.active ? IC.trash : IC.refresh}</button>
       </td>
@@ -1171,6 +1173,7 @@ function renderEmployees() {
       <div class="tc-meta"><span>${esc(u.position_name || '—')}</span><span>${IC.user} ${esc(u.username)}</span><span><span class="status-dot ${u.active ? 'active' : 'inactive'}"></span> ${u.active ? 'Activo' : 'Inactivo'}</span></div>
       <div class="tc-actions">
         <button class="emp-edit-btn" data-id="${u.id}">${IC.edit}</button>
+        <button class="emp-invite-btn" data-id="${u.id}">${IC.link}</button>
         <button class="emp-key-btn" data-id="${u.id}">${IC.key}</button>
         <button class="emp-toggle-btn ${u.active ? 'btn-danger' : ''}" data-id="${u.id}">${u.active ? IC.trash : IC.refresh}</button>
       </div>
@@ -1179,6 +1182,7 @@ function renderEmployees() {
   ['employees-table-body', 'employees-cards'].forEach(rootId => {
     const root = $(rootId);
     root.querySelectorAll('.emp-edit-btn').forEach(b => b.addEventListener('click', () => openEmpModal(Number(b.dataset.id))));
+    root.querySelectorAll('.emp-invite-btn').forEach(b => b.addEventListener('click', () => generateInviteLink(Number(b.dataset.id))));
     root.querySelectorAll('.emp-key-btn').forEach(b => b.addEventListener('click', () => resetEmployeePassword(Number(b.dataset.id))));
     root.querySelectorAll('.emp-toggle-btn').forEach(b => b.addEventListener('click', () => toggleEmployeeActive(Number(b.dataset.id))));
   });
@@ -1283,11 +1287,16 @@ async function saveEmployee() {
     copyBtnNew.textContent = '📋 Copiar credenciales para enviar';
     copyBtnNew.className = 'btn-copy-creds';
     copyBtnNew.addEventListener('click', () => copyCredentials(data.username, data.temp_password));
+    const invBtnNew = document.createElement('button');
+    invBtnNew.textContent = '🔗 Generar enlace de invitación';
+    invBtnNew.className = 'btn-invite-link';
+    invBtnNew.addEventListener('click', () => generateInviteLink(data.id));
     $('emp-temp-result').innerHTML =
       `✅ <b>Empleado creado.</b><br>` +
       `<div style="margin:8px 0">Usuario: <code>${esc(data.username)}</code><br>Contraseña temporal: <code>${esc(data.temp_password)}</code></div>` +
       `<small>Panel: <code>${esc(window.location.origin)}</code> · El empleado deberá cambiar la contraseña en su primer acceso. No se mostrará de nuevo.</small>`;
     $('emp-temp-result').appendChild(copyBtnNew);
+    $('emp-temp-result').appendChild(invBtnNew);
     $('emp-temp-result').classList.remove('hidden');
     $('emp-save').style.display = 'none';
     await loadEmployees(); await loadUsers();
@@ -2452,6 +2461,42 @@ document.addEventListener('keydown', e => {
     closeMembersModal();
   }
 });
+
+/* ── Enlace de invitación ─────────────────────────────── */
+async function generateInviteLink(userId) {
+  const r = await apiFetch(`/api/employees/${userId}/invite`, { method: 'POST' });
+  if (r && r.url) {
+    showInviteBanner(r.url);
+  } else {
+    showToast((r && r.error) || 'No se pudo generar el enlace');
+  }
+}
+
+function showInviteBanner(url) {
+  let old = document.getElementById('invite-banner');
+  if (old) old.remove();
+  const el = document.createElement('div');
+  el.id = 'invite-banner';
+  el.innerHTML = `
+    <div id="invite-banner-box">
+      <button id="invite-close" class="creds-close-btn">✕</button>
+      <div class="creds-title">🔗 Enlace de invitación</div>
+      <div class="invite-url-box">${esc(url)}</div>
+      <small style="color:#777">Caduca en 48 horas · Un solo uso · El empleado elegirá su propia contraseña</small>
+      <button id="invite-copy-btn" class="btn-copy-creds" style="margin-top:10px;width:100%">📋 Copiar enlace</button>
+    </div>
+  `;
+  document.body.appendChild(el);
+  document.getElementById('invite-close').addEventListener('click', () => el.remove());
+  document.getElementById('invite-copy-btn').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast('Enlace copiado — listo para enviar por WhatsApp, Telegram o email ✓');
+    } catch {
+      showToast('No se pudo copiar; selecciona el texto manualmente');
+    }
+  });
+}
 
 /* ── Credenciales de acceso (alta + reset) ─────────────── */
 function buildCredentialsText(username, password) {

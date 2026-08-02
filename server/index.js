@@ -30,6 +30,10 @@ app.use('/webhook', webhookRouter);
 const webhookTelegramRouter = require('./routes/webhookTelegram');
 app.use('/webhook', webhookTelegramRouter);
 
+// Enlace de invitación para nuevos empleados (público, sin auth)
+const inviteRouter = require('./routes/invite');
+app.use('/invite', inviteRouter);
+
 // Middleware JWT — protege /api (verifica token, sesión antigua y cambio de contraseña pendiente)
 const { requireAuth } = require('./middleware/auth');
 

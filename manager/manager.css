@@ -1847,14 +1847,26 @@ body {
 }
 .btn-copy-creds:hover { background: #388e3c; }
 
-#creds-banner {
+#creds-banner, #invite-banner {
   position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 9999;
   display: flex; align-items: center; justify-content: center;
 }
-#creds-banner-box {
+#creds-banner-box, #invite-banner-box {
   background: white; border-radius: 12px; padding: 20px 24px;
-  width: min(380px, 90vw); box-shadow: 0 4px 24px rgba(0,0,0,.3);
+  width: min(420px, 90vw); box-shadow: 0 4px 24px rgba(0,0,0,.3);
 }
+.invite-url-box {
+  background: #f5f5f5; border-radius: 8px; padding: 10px 12px;
+  font-size: 0.78rem; word-break: break-all; color: #333;
+  margin: 10px 0; font-family: monospace; line-height: 1.4;
+  border: 1px solid #e0e0e0;
+}
+.btn-invite-link {
+  display: inline-block; margin-top: 8px; margin-left: 6px; padding: 7px 14px;
+  background: white; color: #00796b; border: 1.5px solid #00796b;
+  border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600;
+}
+.btn-invite-link:hover { background: #e8f5e9; }
 .creds-title { font-size: 1rem; font-weight: 700; margin-bottom: 12px; }
 .creds-row { margin: 6px 0; font-size: 0.88rem; }
 .creds-row code {
@@ -1866,7 +1878,8 @@ body {
   font-size: 1rem; cursor: pointer; color: #666; padding: 0;
 }
 @media (prefers-color-scheme: dark) {
-  #creds-banner-box { background: #1e1e1e; color: #eee; }
+  #creds-banner-box, #invite-banner-box { background: #1e1e1e; color: #eee; }
   .creds-row code { background: #2a2a2a; }
   .creds-close-btn { color: #aaa; }
+  .invite-url-box { background: #2a2a2a; border-color: #444; color: #eee; }
 }

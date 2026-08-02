@@ -757,6 +757,27 @@ router.post('/employees/:id/reset-password', requireRole('manager'), async (req,
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Generar enlace de invitación (caduca en 48h, un solo uso)
+router.post('/employees/:id/invite', requireRole('manager'), async (req, res) => {
+  try {
+    const companyId = req.user.company_id || 1;
+    const user = await db.get('SELECT * FROM users WHERE id = ? AND company_id = ?', [req.params.id, companyId]);
+    if (!user) return res.status(404).json({ error: 'Empleado no encontrado' });
+
+    const crypto = require('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+
+    await db.run(
+      'INSERT INTO invitation_tokens (token, user_id, company_id, expires_at) VALUES (?, ?, ?, ?)',
+      [token, user.id, companyId, expiresAt.toISOString()]
+    );
+
+    const baseUrl = req.protocol + '://' + req.get('host');
+    res.json({ url: `${baseUrl}/invite/${token}` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── CONTACTOS Y GRUPOS (Sprint 3) ──────────────────────
 
 // Listado de contactos (pantalla CONTACTOS; visible para todos los roles)
