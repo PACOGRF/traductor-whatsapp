@@ -1663,7 +1663,7 @@ function renderContacts() {
       '<button title="Editar contacto" onclick="openCtModal(' + c.id + ')">' +
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
       '</button>' +
-      '<button title="Iniciar conversación" onclick="openNewConvModal(' + c.id + ')">' +
+      '<button title="Iniciar conversación" onclick="startConversationDirect(' + c.id + ')">' +
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>' +
       '</button>' +
       '<button title="Eliminar contacto" class="btn-danger" onclick="deleteContact(' + c.id + ')">' +
@@ -1825,6 +1825,28 @@ function renderNewConvList(q) {
 }
 
 $('newconv-search').addEventListener('input', () => renderNewConvList($('newconv-search').value));
+
+// Flujo directo desde el botón 💬 de un contacto concreto — sin modal intermedio
+async function startConversationDirect(contactId) {
+  try {
+    const res = await apiFetch('/api/conversations/start', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contact_id: contactId }),
+    });
+    if (!res) return;
+    if (res.conversation_id) {
+      closeContactsScreen();
+      setActiveNav('nav-conversaciones');
+      selectConversation(res.conversation_id);
+    } else if (res.invite_link) {
+      showInviteBanner(res.invite_link);
+    } else {
+      showToast(res.reason || 'No se pudo generar el enlace');
+    }
+  } catch (err) {
+    showToast('Error: ' + (err.message || 'no se pudo iniciar la conversación'));
+  }
+}
 
 async function startConversation(contactId) {
   try {
