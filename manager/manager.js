@@ -2057,8 +2057,8 @@ function renderIntConvList() {
       const allSel  = gusers.every(u => selected.has(u.id));
       const someSel = gusers.some(u => selected.has(u.id));
       html += `<div class="intconv-group-label">
-        <input type="checkbox" class="intconv-group-check" data-gname="${esc(gname)}" ${allSel ? 'checked' : ''} ${someSel && !allSel ? 'data-partial="1"' : ''}>
         ${esc(gname)}
+        <input type="checkbox" class="intconv-group-check" data-gname="${esc(gname)}" ${allSel ? 'checked' : ''} ${someSel && !allSel ? 'data-partial="1"' : ''}>
       </div>`;
       html += gusers.map(u => intConvUserRow(u, selected)).join('');
     }
@@ -2066,7 +2066,13 @@ function renderIntConvList() {
     if (intConvState.users.length === 0) {
       html = '<div style="padding:16px 12px;color:#999;font-size:0.82rem;text-align:center;line-height:1.5">No hay empleados disponibles.<br>Añade empleados desde la pantalla <b>EMPLEADOS</b> primero.</div>';
     } else {
-      html = list.map(u => intConvUserRow(u, selected)).join('') ||
+      const allSel  = list.every(u => selected.has(u.id));
+      const someSel = list.some(u => selected.has(u.id));
+      html = `<div class="intconv-group-label intconv-select-all">
+        Seleccionar todos
+        <input type="checkbox" class="intconv-group-check intconv-all-check" ${allSel ? 'checked' : ''} ${someSel && !allSel ? 'data-partial="1"' : ''}>
+      </div>`;
+      html += list.map(u => intConvUserRow(u, selected)).join('') ||
         '<div style="padding:10px 12px;color:#999;font-size:0.82rem">Sin coincidencias</div>';
     }
   }
@@ -2079,6 +2085,18 @@ function renderIntConvList() {
         intConvState.selected.size + ' seleccionado' + (intConvState.selected.size !== 1 ? 's' : '');
     });
   });
+
+  // Checkbox "Seleccionar todos" (vista Todos)
+  const allCb = $('intconv-list').querySelector('.intconv-all-check');
+  if (allCb) {
+    if (allCb.dataset.partial) allCb.indeterminate = true;
+    allCb.addEventListener('change', () => {
+      intConvState.users.forEach(u => allCb.checked ? intConvState.selected.add(u.id) : intConvState.selected.delete(u.id));
+      $('intconv-list').querySelectorAll('.intconv-check').forEach(uc => { uc.checked = allCb.checked; });
+      $('intconv-selected-count').textContent =
+        intConvState.selected.size + ' seleccionado' + (intConvState.selected.size !== 1 ? 's' : '');
+    });
+  }
 
   // Checkboxes de grupo: marcar / desmarcar todos del grupo
   $('intconv-list').querySelectorAll('.intconv-group-check').forEach(gcb => {

@@ -1617,6 +1617,10 @@ body {
 .intconv-group-check {
   width: 14px; height: 14px; cursor: pointer;
   accent-color: var(--green-mid); flex-shrink: 0;
+  margin-left: auto;
+}
+.intconv-select-all {
+  color: var(--green-dark); border-bottom: 2px solid var(--green-light);
 }
 .intconv-item {
   display: flex;
