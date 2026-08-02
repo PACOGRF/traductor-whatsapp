@@ -1839,7 +1839,7 @@ async function startConversationDirect(contactId) {
       setActiveNav('nav-conversaciones');
       selectConversation(res.conversation_id);
     } else if (res.invite_link) {
-      showInviteBanner(res.invite_link);
+      showInviteBanner(res.invite_link, 'Comparte este enlace para que el contacto inicie el chat por Telegram.');
     } else {
       showToast(res.reason || 'No se pudo generar el enlace');
     }
@@ -2508,7 +2508,8 @@ async function generateInviteLink(userId) {
   }
 }
 
-function showInviteBanner(url) {
+function showInviteBanner(url, subtitle) {
+  const defaultSubtitle = 'Caduca en 48 horas · Un solo uso · El usuario elegirá su propia contraseña';
   let old = document.getElementById('invite-banner');
   if (old) old.remove();
   const el = document.createElement('div');
@@ -2518,7 +2519,7 @@ function showInviteBanner(url) {
       <button id="invite-close" class="creds-close-btn">✕</button>
       <div class="creds-title">🔗 Enlace de invitación</div>
       <div class="invite-url-box">${esc(url)}</div>
-      <small style="color:#777">Caduca en 48 horas · Un solo uso · El usuario elegirá su propia contraseña</small>
+      <small style="color:#777">${esc(subtitle || defaultSubtitle)}</small>
       <button id="invite-copy-btn" class="btn-copy-creds" style="margin-top:10px;width:100%">📋 Copiar enlace</button>
     </div>
   `;
