@@ -1630,6 +1630,70 @@ body {
 }
 #intconv-selected-count { font-weight: 700; color: var(--green-dark); }
 
+/* ═══════════ GESTIÓN DE MIEMBROS (Sprint 6) ═══════════ */
+
+#members-btn {
+  background: none; border: none; cursor: pointer;
+  color: rgba(255,255,255,0.8); padding: 4px 6px;
+  border-radius: 6px; display: flex; align-items: center; gap: 1px;
+  transition: color 0.15s;
+}
+#members-btn:hover { color: white; }
+#members-btn.hidden { display: none; }
+
+#members-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 410;
+}
+#members-overlay.hidden { display: none; }
+
+#members-modal {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(420px, calc(100vw - 2rem)); max-height: 80vh;
+  background: white; border-radius: 12px; z-index: 411; color: #333;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+#members-modal.hidden { display: none; }
+
+#members-header {
+  background: var(--green-dark); color: white; padding: 0 1rem;
+  height: var(--header-h); display: flex; align-items: center;
+  justify-content: space-between; font-weight: 600; flex-shrink: 0;
+}
+#members-close {
+  background: none; border: none; color: white; font-size: 1.1rem; cursor: pointer;
+}
+
+#members-body {
+  padding: 0.75rem 1rem 1rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;
+}
+
+.member-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 0; border-bottom: 1px solid #f0f0f0;
+}
+.member-row:last-child { border-bottom: none; }
+.member-info { flex: 1; min-width: 0; }
+.member-name { display: block; font-size: 0.85rem; font-weight: 600; color: #222; }
+.member-sub  { display: block; font-size: 0.74rem; color: #888; }
+
+.member-reply-label {
+  display: flex; align-items: center; gap: 5px; cursor: pointer; flex-shrink: 0;
+}
+.member-reply-toggle { width: 40px; height: 22px; border-radius: 11px; position: relative; transition: background 0.2s; flex-shrink: 0; }
+.member-reply-text { font-size: 0.72rem; color: #666; width: 30px; }
+
+.members-divider { border: none; border-top: 1px solid #eee; margin: 0.5rem 0; }
+
+.members-add-section { display: flex; flex-direction: column; gap: 6px; }
+.members-add-label { font-size: 0.8rem; font-weight: 600; color: #555; }
+.members-add-row { display: flex; gap: 8px; }
+.members-add-row select {
+  flex: 1; border: 1.5px solid #ddd; border-radius: 8px;
+  padding: 7px 8px; font-size: 0.84rem; font-family: inherit; outline: none;
+}
+.members-add-row select:focus { border-color: var(--green-mid); }
+
 /* ═══════════ SPRINT 6: CONFIGURACIÓN ═══════════ */
 
 #config-screen {

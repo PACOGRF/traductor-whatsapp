@@ -67,10 +67,11 @@ function registerChatHandlers(io, app) {
       if (!text || !text.trim()) return;
       try {
         const member = await db.get(
-          'SELECT 1 FROM conversation_participants WHERE conversation_id = ? AND user_id = ?',
+          'SELECT can_reply FROM conversation_participants WHERE conversation_id = ? AND user_id = ?',
           [conversationId, socket.user?.user_id]
         );
         if (!member) return socket.emit('error', { msg: 'No perteneces a este chat' });
+        if (member.can_reply === false) return socket.emit('error', { msg: 'Solo puedes leer este chat' });
 
         await db.run(
           `INSERT INTO messages (conversation_id, direction, original_text, translated_text, sender_user_id, requires_ack)

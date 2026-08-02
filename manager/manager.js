@@ -797,6 +797,13 @@ async function selectConversation(id) {
   }
   msgRequiresAck = false;
 
+  // Botón gestionar miembros: solo en chats internos y solo si es gestor o creador
+  const myId = Number(localStorage.getItem('chatlink_user_id'));
+  const myRole = localStorage.getItem('chatlink_role');
+  const canManage = conv.channel === 'internal' &&
+    (myRole === 'manager' || conv.created_by === myId);
+  $('members-btn').classList.toggle('hidden', !canManage);
+
   // Mostrar chat, ocultar bienvenida
   welcomeScreen.style.display = 'none';
   messagesArea.style.display  = 'flex';
@@ -2324,6 +2331,120 @@ socket.on('message_acked', ({ message_id, user_id, user_name }) => {
   if (user_id === myId) {
     const btn = document.querySelector(`.msg-ack-btn[data-mid="${message_id}"]`);
     if (btn) btn.outerHTML = '<span class="msg-ack-done">Confirmado ✓</span>';
+  }
+});
+
+// ============ GESTIÓN DE MIEMBROS DEL CHAT INTERNO ============
+
+let _membersConvId = null;
+
+async function openMembersModal(convId) {
+  _membersConvId = convId;
+  $('members-overlay').classList.remove('hidden');
+  $('members-modal').classList.remove('hidden');
+  $('members-list').innerHTML = '<div style="color:#aaa;font-size:0.83rem;padding:8px">Cargando…</div>';
+  await refreshMembersModal();
+}
+
+function closeMembersModal() {
+  $('members-overlay').classList.add('hidden');
+  $('members-modal').classList.add('hidden');
+  _membersConvId = null;
+}
+
+async function refreshMembersModal() {
+  const convId = _membersConvId;
+  const [members, allUsers] = await Promise.all([
+    apiFetch(`/api/conversations/${convId}/members`),
+    apiFetch('/api/users'),
+  ]);
+
+  // Lista de miembros actuales
+  const myId = Number(localStorage.getItem('chatlink_user_id'));
+  const memberIds = new Set((members || []).map(m => m.id));
+
+  $('members-list').innerHTML = (members || []).map(m => {
+    const name = `${esc(m.first_name)} ${esc(m.last_name || '')}`.trim();
+    const sub  = esc(m.position_name || m.role || '');
+    const canReply = m.can_reply !== false;
+    return `<div class="member-row" data-uid="${m.id}">
+      <div class="member-info">
+        <span class="member-name">${name}</span>
+        ${sub ? `<span class="member-sub">${sub}</span>` : ''}
+      </div>
+      <label class="member-reply-label" title="${canReply ? 'Puede escribir' : 'Solo lectura'}">
+        <span class="toggle-track member-reply-toggle" data-uid="${m.id}" data-can="${canReply ? '1' : '0'}">
+          <span class="toggle-thumb" style="left:${canReply ? '20px' : '2px'}"></span>
+        </span>
+        <span class="member-reply-text">${canReply ? 'Escribe' : 'Lee'}</span>
+      </label>
+      <button class="member-remove-btn btn-small btn-danger" data-uid="${m.id}" ${m.id === myId ? 'disabled title="No puedes quitarte a ti mismo"' : ''}>Quitar</button>
+    </div>`;
+  }).join('') || '<div style="color:#aaa;font-size:0.83rem;padding:8px">Sin miembros</div>';
+
+  // Toggle can_reply
+  $('members-list').querySelectorAll('.member-reply-toggle').forEach(el => {
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', async () => {
+      const uid = Number(el.dataset.uid);
+      const newVal = el.dataset.can !== '1';
+      const r = await apiFetch(`/api/conversations/${convId}/members/${uid}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ can_reply: newVal }),
+      });
+      if (r?.ok) {
+        el.dataset.can = newVal ? '1' : '0';
+        el.querySelector('.toggle-thumb').style.left = newVal ? '20px' : '2px';
+        el.style.background = newVal ? '' : '';
+        el.nextElementSibling.textContent = newVal ? 'Escribe' : 'Lee';
+        el.style.background = newVal ? 'var(--green-mid)' : '#ccc';
+        showToast(newVal ? 'Permiso de escritura activado' : 'Cambiado a solo lectura');
+      } else showToast(r?.error || 'Error al cambiar permiso');
+    });
+    // color inicial
+    el.style.background = el.dataset.can === '1' ? 'var(--green-mid)' : '#ccc';
+  });
+
+  // Quitar miembro
+  $('members-list').querySelectorAll('.member-remove-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('¿Quitar a este miembro del chat?')) return;
+      const r = await apiFetch(`/api/conversations/${convId}/members/${btn.dataset.uid}`, { method: 'DELETE' });
+      if (r?.ok) { showToast('Miembro eliminado'); await refreshMembersModal(); }
+      else showToast(r?.error || 'Error al quitar miembro');
+    });
+  });
+
+  // Select para añadir: solo empleados que no son ya miembros
+  const select = $('members-add-select');
+  select.innerHTML = '<option value="">— Elige un empleado —</option>' +
+    (allUsers || []).filter(u => !memberIds.has(u.id)).map(u =>
+      `<option value="${u.id}">${esc(u.first_name)} ${esc(u.last_name || '')}</option>`
+    ).join('');
+}
+
+$('members-btn').addEventListener('click', () => {
+  if (state.activeConvId) openMembersModal(state.activeConvId);
+});
+$('members-close').addEventListener('click', closeMembersModal);
+$('members-overlay').addEventListener('click', closeMembersModal);
+
+$('members-add-btn').addEventListener('click', async () => {
+  const uid = Number($('members-add-select').value);
+  if (!uid) { showToast('Selecciona un empleado'); return; }
+  const r = await apiFetch(`/api/conversations/${_membersConvId}/members`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: uid }),
+  });
+  if (r?.ok) { showToast('Miembro añadido'); await refreshMembersModal(); }
+  else showToast(r?.error || 'Error al añadir miembro');
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$('members-modal').classList.contains('hidden')) {
+    closeMembersModal();
   }
 });
 

@@ -20,6 +20,7 @@ router.get('/conversations', async (req, res) => {
     const rows = await db.all(`
       SELECT c.*, ct.name AS contact_name, ct.phone AS contact_phone, ct.group_id AS contact_group_id,
         cp.user_id AS is_member,
+        cp.can_reply AS member_can_reply,
         (SELECT COUNT(*) FROM conversation_participants WHERE conversation_id = c.id) AS member_count,
         (SELECT m.translated_text FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message,
         (SELECT m.created_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message_at,
@@ -39,8 +40,8 @@ router.get('/conversations', async (req, res) => {
     const result = [];
     for (const r of rows) {
       if (r.channel === 'internal') {
-        if (!r.is_member) continue; // solo miembros ven el chat interno
-        result.push({ ...r, unanswered_hours: null, can_reply: true });
+        if (!r.is_member) continue;
+        result.push({ ...r, unanswered_hours: null, can_reply: r.member_can_reply !== false });
         continue;
       }
       const access = convAccess(vis, r);
@@ -1068,10 +1069,10 @@ router.post('/internal-conversations', async (req, res) => {
     const allIds = Array.from(new Set([userId, ...member_ids.map(Number)].filter(Boolean)));
 
     const conv = await db.get(
-      `INSERT INTO conversations (company_id, channel, status, internal_name, updated_at)
-       VALUES (?, 'internal', 'open', ?, NOW())
+      `INSERT INTO conversations (company_id, channel, status, internal_name, created_by, updated_at)
+       VALUES (?, 'internal', 'open', ?, ?, NOW())
        RETURNING id`,
-      [companyId, name || null]
+      [companyId, name || null, userId || null]
     );
 
     for (const uid of allIds) {
@@ -1096,7 +1097,7 @@ router.post('/internal-conversations', async (req, res) => {
 router.get('/conversations/:id/members', async (req, res) => {
   try {
     const rows = await db.all(
-      `SELECT u.id, u.first_name, u.last_name, u.role, p.name AS position_name
+      `SELECT u.id, u.first_name, u.last_name, u.role, p.name AS position_name, cp.can_reply
        FROM conversation_participants cp
        JOIN users u ON u.id = cp.user_id
        LEFT JOIN positions p ON p.id = u.position_id
@@ -1105,6 +1106,63 @@ router.get('/conversations/:id/members', async (req, res) => {
       [req.params.id]
     );
     res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Añadir miembro (solo creador o gestor)
+router.post('/conversations/:id/members', async (req, res) => {
+  try {
+    const conv = await db.get('SELECT created_by FROM conversations WHERE id = ?', [req.params.id]);
+    if (!conv) return res.status(404).json({ error: 'Conversación no encontrada' });
+    if (req.user?.role !== 'manager' && conv.created_by !== req.user?.user_id) {
+      return res.status(403).json({ error: 'Sin permiso para gestionar este chat' });
+    }
+    const { user_id } = req.body;
+    if (!user_id) return res.status(400).json({ error: 'user_id requerido' });
+    await db.run(
+      'INSERT INTO conversation_participants (conversation_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING',
+      [req.params.id, Number(user_id)]
+    );
+    const io = req.app.get('io');
+    if (io) io.emit('conv_list_changed');
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Quitar miembro (solo creador o gestor; no puede quitarse a sí mismo si es el único)
+router.delete('/conversations/:id/members/:userId', async (req, res) => {
+  try {
+    const conv = await db.get('SELECT created_by FROM conversations WHERE id = ?', [req.params.id]);
+    if (!conv) return res.status(404).json({ error: 'Conversación no encontrada' });
+    if (req.user?.role !== 'manager' && conv.created_by !== req.user?.user_id) {
+      return res.status(403).json({ error: 'Sin permiso para gestionar este chat' });
+    }
+    const count = await db.get('SELECT COUNT(*) AS n FROM conversation_participants WHERE conversation_id = ?', [req.params.id]);
+    if (Number(count?.n) <= 1) return res.status(409).json({ error: 'No puedes quitar al único miembro del chat' });
+    await db.run(
+      'DELETE FROM conversation_participants WHERE conversation_id = ? AND user_id = ?',
+      [req.params.id, req.params.userId]
+    );
+    const io = req.app.get('io');
+    if (io) io.emit('conv_list_changed');
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Cambiar permiso can_reply de un miembro (solo creador o gestor)
+router.patch('/conversations/:id/members/:userId', async (req, res) => {
+  try {
+    const conv = await db.get('SELECT created_by FROM conversations WHERE id = ?', [req.params.id]);
+    if (!conv) return res.status(404).json({ error: 'Conversación no encontrada' });
+    if (req.user?.role !== 'manager' && conv.created_by !== req.user?.user_id) {
+      return res.status(403).json({ error: 'Sin permiso para gestionar este chat' });
+    }
+    const { can_reply } = req.body;
+    await db.run(
+      'UPDATE conversation_participants SET can_reply = ? WHERE conversation_id = ? AND user_id = ?',
+      [can_reply !== false, req.params.id, req.params.userId]
+    );
+    res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
