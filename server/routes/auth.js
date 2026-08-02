@@ -32,7 +32,7 @@ router.post('/login', async (req, res) => {
     }
 
     const user = await db.get(
-      'SELECT * FROM users WHERE username = ? AND active = true',
+      'SELECT * FROM users WHERE LOWER(username) = LOWER(?) AND active = true',
       [username.trim()]
     );
 

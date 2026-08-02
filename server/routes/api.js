@@ -665,8 +665,8 @@ router.post('/employees', requireRole('manager'), async (req, res) => {
     if (!['manager', 'supervisor', 'employee'].includes(role)) {
       return res.status(400).json({ error: 'Rol no válido' });
     }
-    const clean = username.trim().toLowerCase();
-    const exists = await db.get('SELECT id FROM users WHERE username = ?', [clean]);
+    const clean = username.trim();
+    const exists = await db.get('SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND company_id = ?', [clean, req.user.company_id || 1]);
     if (exists) return res.status(409).json({ error: 'Ese nombre de usuario ya existe' });
 
     const companyId = req.user.company_id || 1;

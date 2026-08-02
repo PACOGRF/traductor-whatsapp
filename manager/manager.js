@@ -1485,7 +1485,7 @@ backBtn.addEventListener('click', () => {
   }
   welcomeScreen.style.display = 'flex';
   messagesArea.style.display  = 'none';
-  chatGuestName.textContent   = 'Panel del Gestor';
+  chatGuestName.textContent   = localStorage.getItem('chatlink_name') || 'Panel del Gestor';
   chatGuestMeta.textContent   = '';
   state.activeConvId = null;
   renderConvList();
