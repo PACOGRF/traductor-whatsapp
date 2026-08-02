@@ -58,6 +58,9 @@ const backBtn        = $('back-btn');
 const toast          = $('toast');
 const tasksList      = $('tasks-list');
 
+// Personalizar header con el nombre del usuario desde el primer render
+chatGuestName.textContent = localStorage.getItem('chatlink_name') || 'Panel del Gestor';
+
 /* ── Socket.io (con identidad: permisos por rol, Sprint 2) ── */
 const socket = io({ auth: { token: authToken } });
 
