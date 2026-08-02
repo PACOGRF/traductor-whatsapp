@@ -1605,11 +1605,18 @@ body {
   padding: 6px 10px 3px;
   font-size: 0.72rem;
   font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   color: #888;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   background: #f8f8f8;
   border-bottom: 1px solid #eee;
+}
+.intconv-group-check {
+  width: 14px; height: 14px; cursor: pointer;
+  accent-color: var(--green-mid); flex-shrink: 0;
 }
 .intconv-item {
   display: flex;

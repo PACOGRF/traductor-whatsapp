@@ -2054,7 +2054,12 @@ function renderIntConvList() {
       groups[g].push(u);
     });
     for (const [gname, gusers] of Object.entries(groups)) {
-      html += `<div class="intconv-group-label">${esc(gname)}</div>`;
+      const allSel  = gusers.every(u => selected.has(u.id));
+      const someSel = gusers.some(u => selected.has(u.id));
+      html += `<div class="intconv-group-label">
+        <input type="checkbox" class="intconv-group-check" data-gname="${esc(gname)}" ${allSel ? 'checked' : ''} ${someSel && !allSel ? 'data-partial="1"' : ''}>
+        ${esc(gname)}
+      </div>`;
       html += gusers.map(u => intConvUserRow(u, selected)).join('');
     }
   } else {
@@ -2070,6 +2075,23 @@ function renderIntConvList() {
     cb.addEventListener('change', () => {
       const uid = Number(cb.dataset.uid);
       cb.checked ? intConvState.selected.add(uid) : intConvState.selected.delete(uid);
+      $('intconv-selected-count').textContent =
+        intConvState.selected.size + ' seleccionado' + (intConvState.selected.size !== 1 ? 's' : '');
+    });
+  });
+
+  // Checkboxes de grupo: marcar / desmarcar todos del grupo
+  $('intconv-list').querySelectorAll('.intconv-group-check').forEach(gcb => {
+    if (gcb.dataset.partial) gcb.indeterminate = true;
+    gcb.addEventListener('change', () => {
+      const gname = gcb.dataset.gname;
+      const key   = intConvState.filter === 'role' ? 'role' : 'position_name';
+      const fallback = 'Sin ' + (intConvState.filter === 'role' ? 'rol' : 'puesto');
+      const groupUsers = intConvState.users.filter(u => (u[key] || fallback) === gname);
+      groupUsers.forEach(u => gcb.checked ? intConvState.selected.add(u.id) : intConvState.selected.delete(u.id));
+      $('intconv-list').querySelectorAll('.intconv-check').forEach(uc => {
+        if (groupUsers.some(u => u.id === Number(uc.dataset.uid))) uc.checked = gcb.checked;
+      });
       $('intconv-selected-count').textContent =
         intConvState.selected.size + ' seleccionado' + (intConvState.selected.size !== 1 ? 's' : '');
     });
