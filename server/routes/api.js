@@ -848,10 +848,11 @@ router.put('/contacts/:id', requireRole('manager', 'supervisor'), async (req, re
       [name.trim(), cleanPhone, company_name || null, gid, preferred_language || null, permanent_notes || null, contact.id]
     );
 
-    // Idioma preferido: se aplica a sus conversaciones para la traducción
+    // Idioma preferido y grupo: se propagan a las conversaciones del contacto
     if (preferred_language) {
       await db.run('UPDATE conversations SET guest_language = ? WHERE contact_id = ?', [preferred_language, contact.id]);
     }
+    await db.run('UPDATE conversations SET group_id = ? WHERE contact_id = ?', [gid, contact.id]);
 
     const { logAudit } = require('../services/audit');
     await logAudit(companyId, req.user.user_id, 'contact_updated', { contact_id: contact.id });
