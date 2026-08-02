@@ -2518,7 +2518,7 @@ function showInviteBanner(url) {
       <button id="invite-close" class="creds-close-btn">✕</button>
       <div class="creds-title">🔗 Enlace de invitación</div>
       <div class="invite-url-box">${esc(url)}</div>
-      <small style="color:#777">Caduca en 48 horas · Un solo uso · El empleado elegirá su propia contraseña</small>
+      <small style="color:#777">Caduca en 48 horas · Un solo uso · El usuario elegirá su propia contraseña</small>
       <button id="invite-copy-btn" class="btn-copy-creds" style="margin-top:10px;width:100%">📋 Copiar enlace</button>
     </div>
   `;
