@@ -1530,7 +1530,7 @@ async function apiFetch(url, options = {}) {
       const body = await r.clone().json().catch(() => ({}));
       if (body.code === 'MUST_CHANGE_PASSWORD') { window.location.href = '/change-password.html'; return null; }
     }
-    if (!r.ok) throw new Error(r.statusText);
+    if (!r.ok) return r.json().catch(() => ({ error: r.statusText }));
     return r.json();
   } catch (e) {
     console.error('apiFetch error:', url, e);
