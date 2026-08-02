@@ -1279,10 +1279,15 @@ async function saveEmployee() {
     const res = await fetch('/api/employees', { method: 'POST', headers, body: JSON.stringify(body) });
     const data = await res.json();
     if (!res.ok) { showToast(data.error || 'No se pudo crear el empleado'); return; }
-    // Mostrar la contraseña temporal UNA sola vez
+    const copyBtnNew = document.createElement('button');
+    copyBtnNew.textContent = '📋 Copiar credenciales para enviar';
+    copyBtnNew.className = 'btn-copy-creds';
+    copyBtnNew.addEventListener('click', () => copyCredentials(data.username, data.temp_password));
     $('emp-temp-result').innerHTML =
-      `✅ Empleado creado.<br>Usuario: <code>${esc(data.username)}</code> — Contraseña temporal: <code>${esc(data.temp_password)}</code>` +
-      `<br><small>Cópiala y dásela al empleado: la cambiará obligatoriamente en su primer acceso. No se volverá a mostrar.</small>`;
+      `✅ <b>Empleado creado.</b><br>` +
+      `<div style="margin:8px 0">Usuario: <code>${esc(data.username)}</code><br>Contraseña temporal: <code>${esc(data.temp_password)}</code></div>` +
+      `<small>Panel: <code>${esc(window.location.origin)}</code> · El empleado deberá cambiar la contraseña en su primer acceso. No se mostrará de nuevo.</small>`;
+    $('emp-temp-result').appendChild(copyBtnNew);
     $('emp-temp-result').classList.remove('hidden');
     $('emp-save').style.display = 'none';
     await loadEmployees(); await loadUsers();
@@ -1312,7 +1317,7 @@ async function resetEmployeePassword(id) {
   if (!confirm(`¿Generar una contraseña temporal nueva para ${u.first_name}? La actual dejará de valer.`)) return;
   const r = await apiFetch(`/api/employees/${id}/reset-password`, { method: 'POST' });
   if (r && r.temp_password) {
-    prompt(`Contraseña temporal de ${u.first_name} (cópiala; no se mostrará de nuevo):`, r.temp_password);
+    showCredentialsBanner(u.username, r.temp_password);
   } else showToast('No se pudo resetear la contraseña');
 }
 
@@ -2447,4 +2452,40 @@ document.addEventListener('keydown', e => {
     closeMembersModal();
   }
 });
+
+/* ── Credenciales de acceso (alta + reset) ─────────────── */
+function buildCredentialsText(username, password) {
+  const url = window.location.origin;
+  return `Tu acceso a ChatLink:\n\n🌐 Panel: ${url}\n👤 Usuario: ${username}\n🔑 Contraseña temporal: ${password}\n\n⚠️ Deberás cambiar la contraseña en tu primer acceso.`;
+}
+
+async function copyCredentials(username, password) {
+  try {
+    await navigator.clipboard.writeText(buildCredentialsText(username, password));
+    showToast('Credenciales copiadas — listas para pegar en WhatsApp ✓');
+  } catch {
+    showToast('No se pudo copiar; selecciona el texto manualmente');
+  }
+}
+
+function showCredentialsBanner(username, password) {
+  let old = document.getElementById('creds-banner');
+  if (old) old.remove();
+  const el = document.createElement('div');
+  el.id = 'creds-banner';
+  el.innerHTML = `
+    <div id="creds-banner-box">
+      <button id="creds-close" class="creds-close-btn">✕</button>
+      <div class="creds-title">🔑 Credenciales de acceso</div>
+      <div class="creds-row">Panel: <code>${esc(window.location.origin)}</code></div>
+      <div class="creds-row">Usuario: <code>${esc(username)}</code></div>
+      <div class="creds-row">Contraseña temporal: <code>${esc(password)}</code></div>
+      <small style="color:#777">El empleado deberá cambiar la contraseña en su primer acceso.</small>
+      <button id="creds-copy-btn" class="btn-copy-creds" style="margin-top:10px;width:100%">📋 Copiar para enviar</button>
+    </div>
+  `;
+  document.body.appendChild(el);
+  document.getElementById('creds-close').addEventListener('click', () => el.remove());
+  document.getElementById('creds-copy-btn').addEventListener('click', () => copyCredentials(username, password));
+}
 
