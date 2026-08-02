@@ -23,6 +23,7 @@ const state = {
   users: [],              // empleados de la empresa (desplegables de responsable)
   alerts: [],             // alertas vencidas globales (columna derecha, abajo)
   notes: [],              // notas ancladas de la conversación activa (D8)
+  convFilter: { type: null, groupId: null },
 };
 let editingScheduledId = null;
 
@@ -209,13 +210,80 @@ async function loadScheduled(convId) {
 }
 
 /* ── Renderizado: lista de conversaciones ───────────── */
+function renderConvFilterBar() {
+  const bar = document.getElementById('conv-filter-bar');
+  if (!bar) return;
+  const { type, groupId } = state.convFilter;
+
+  // Grupos únicos de conversaciones externas
+  const groups = [];
+  const seenIds = new Set();
+  state.conversations.forEach(c => {
+    if (c.channel === 'internal') return;
+    const gid = c.group_id || c.contact_group_id;
+    if (gid && c.group_name && !seenIds.has(gid)) {
+      seenIds.add(gid);
+      groups.push({ id: gid, name: c.group_name });
+    }
+  });
+
+  const chip = (label, active, attrs) =>
+    `<button class="conv-filter-chip${active ? ' active' : ''}" ${attrs}>${label}</button>`;
+
+  let html = `<div class="conv-filter-row">
+    ${chip('Todos',    !type,              'data-ftype=""')}
+    ${chip('Internos', type === 'internal', 'data-ftype="internal"')}
+    ${chip('Externos', type === 'external', 'data-ftype="external"')}
+  </div>`;
+
+  if (type === 'external' && groups.length) {
+    html += `<div class="conv-filter-row conv-filter-groups">` +
+      groups.map(g => chip(esc(g.name), groupId === g.id, `data-fgroup="${g.id}"`)).join('') +
+      `</div>`;
+  }
+
+  bar.innerHTML = html;
+
+  bar.querySelectorAll('[data-ftype]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = btn.dataset.ftype || null;
+      state.convFilter.type    = state.convFilter.type === t && t ? null : t;
+      if (state.convFilter.type !== 'external') state.convFilter.groupId = null;
+      renderConvFilterBar();
+      renderConvList();
+    });
+  });
+
+  bar.querySelectorAll('[data-fgroup]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const gid = Number(btn.dataset.fgroup);
+      state.convFilter.groupId = state.convFilter.groupId === gid ? null : gid;
+      renderConvFilterBar();
+      renderConvList();
+    });
+  });
+}
+
 function renderConvList() {
-  if (state.conversations.length === 0) {
-    convList.innerHTML = `<div class="conv-empty">Aún no hay conversaciones.<br>Usa el panel amarillo de abajo para<br>simular un mensaje de huésped.</div>`;
+  renderConvFilterBar();
+
+  const { type, groupId } = state.convFilter;
+  let list = state.conversations;
+  if (type === 'internal') {
+    list = list.filter(c => c.channel === 'internal');
+  } else if (type === 'external') {
+    list = list.filter(c => c.channel !== 'internal');
+    if (groupId) list = list.filter(c => (c.group_id || c.contact_group_id) === groupId);
+  }
+
+  if (list.length === 0) {
+    convList.innerHTML = state.conversations.length === 0
+      ? `<div class="conv-empty">Aún no hay conversaciones.<br>Usa el panel amarillo de abajo para<br>simular un mensaje de huésped.</div>`
+      : `<div class="conv-empty">Sin resultados para este filtro.</div>`;
     return;
   }
 
-  convList.innerHTML = state.conversations.map(c => {
+  convList.innerHTML = list.map(c => {
     const isInternal = c.channel === 'internal';
     const initials   = isInternal
       ? String(c.member_count || '?')
