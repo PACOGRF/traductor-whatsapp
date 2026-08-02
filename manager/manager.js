@@ -1866,8 +1866,19 @@ async function startConversation(contactId) {
       });
     } else if (res.invite_link) {
       const contact = ctState.contacts.find(c => c.id === contactId);
-      resultEl.innerHTML = 'Comparte este enlace con ' + esc(contact ? contact.name : 'el contacto') + ':<br>' +
-        '<a href="' + res.invite_link + '" target="_blank" rel="noopener">' + res.invite_link + '</a>';
+      const name = contact ? contact.name : 'el contacto';
+      resultEl.innerHTML =
+        'Comparte este enlace con <b>' + esc(name) + '</b>:<br>' +
+        '<a href="' + res.invite_link + '" target="_blank" rel="noopener">' + esc(res.invite_link) + '</a>' +
+        '<br><button id="newconv-copy-link" class="btn-copy-creds" style="margin-top:8px;width:100%">📋 Copiar enlace</button>';
+      document.getElementById('newconv-copy-link').addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(res.invite_link);
+          showToast('Enlace copiado — listo para enviar ✓');
+        } catch {
+          showToast('No se pudo copiar; selecciona el texto manualmente');
+        }
+      });
     } else {
       resultEl.innerHTML = '<span style="color:#c62828">' + esc(res.reason || 'No se pudo iniciar la conversaci\xF3n') + '</span>';
     }
