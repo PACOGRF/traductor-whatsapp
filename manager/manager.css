@@ -64,12 +64,15 @@ body {
 
 #sidebar-header {
   background: var(--green-dark);
+  flex-shrink: 0;
+}
+
+#sidebar-header-top {
   min-height: var(--header-h);
   padding: 0.6rem 1rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-shrink: 0;
 }
 
 /* Ocultar botones móvil en escritorio */
@@ -149,9 +152,7 @@ body {
 }
 
 #conv-filter-bar {
-  background: var(--green-dark);
-  padding: 6px 8px 0;
-  flex-shrink: 0;
+  padding: 0 8px 6px;
 }
 .conv-filter-row {
   display: flex;
