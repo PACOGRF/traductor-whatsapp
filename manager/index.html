@@ -59,6 +59,9 @@
       <div id="chat-brand">
         <div id="chat-brand-name">ChatLink</div>
         <div id="chat-guest-name">Panel del Gestor</div>
+        <button id="user-pwd-btn" title="Cambiar mi contraseña">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
         <div id="chat-guest-meta"></div>
       </div>
       <div class="header-actions">
@@ -484,6 +487,31 @@
         <button id="members-add-btn" class="btn-primary">Añadir</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Modal: cambiar mi contraseña (todos los roles) -->
+<div id="user-pwd-overlay" class="hidden"></div>
+<div id="user-pwd-modal" class="hidden">
+  <div id="user-pwd-header">
+    <span>🔐 Cambiar mi contraseña</span>
+    <button id="user-pwd-close">✕</button>
+  </div>
+  <div id="user-pwd-body">
+    <div class="config-field">
+      <label for="user-pwd-current">Contraseña actual</label>
+      <input type="password" id="user-pwd-current" autocomplete="current-password" placeholder="••••••••">
+    </div>
+    <div class="config-field">
+      <label for="user-pwd-new">Nueva contraseña (mínimo 8 caracteres)</label>
+      <input type="password" id="user-pwd-new" autocomplete="new-password" placeholder="••••••••">
+    </div>
+    <div class="config-field">
+      <label for="user-pwd-confirm">Repetir nueva contraseña</label>
+      <input type="password" id="user-pwd-confirm" autocomplete="new-password" placeholder="••••••••">
+    </div>
+    <div id="user-pwd-error" style="color:#c0392b;font-size:0.85rem;min-height:1.2rem;"></div>
+    <button id="user-pwd-save" class="btn-primary" style="width:100%;margin-top:0.25rem;">Cambiar contraseña</button>
   </div>
 </div>
 

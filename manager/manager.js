@@ -2537,3 +2537,65 @@ function showCredentialsBanner(username, password) {
   document.getElementById('creds-copy-btn').addEventListener('click', () => copyCredentials(username, password));
 }
 
+/* ── Modal cambiar mi contraseña (todos los roles) ──────── */
+function openUserPwdModal() {
+  $('user-pwd-current').value = '';
+  $('user-pwd-new').value = '';
+  $('user-pwd-confirm').value = '';
+  $('user-pwd-error').textContent = '';
+  $('user-pwd-overlay').classList.remove('hidden');
+  $('user-pwd-modal').classList.remove('hidden');
+  $('user-pwd-current').focus();
+}
+
+function closeUserPwdModal() {
+  $('user-pwd-overlay').classList.add('hidden');
+  $('user-pwd-modal').classList.add('hidden');
+}
+
+async function submitUserPwdChange() {
+  const current = $('user-pwd-current').value;
+  const nueva   = $('user-pwd-new').value;
+  const repite  = $('user-pwd-confirm').value;
+  const errEl   = $('user-pwd-error');
+  const saveBtn = $('user-pwd-save');
+
+  errEl.textContent = '';
+  if (!current || !nueva || !repite) { errEl.textContent = 'Rellena todos los campos'; return; }
+  if (nueva.length < 8)              { errEl.textContent = 'La nueva contraseña debe tener al menos 8 caracteres'; return; }
+  if (nueva !== repite)              { errEl.textContent = 'Las contraseñas nuevas no coinciden'; return; }
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Guardando…';
+
+  const token = localStorage.getItem('chatlink_token');
+  try {
+    const res = await fetch('/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ current_password: current, new_password: nueva }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      localStorage.setItem('chatlink_token', data.token);
+      closeUserPwdModal();
+      showToast('Contraseña cambiada correctamente ✓');
+    } else {
+      errEl.textContent = data.error || 'No se pudo cambiar la contraseña';
+    }
+  } catch {
+    errEl.textContent = 'Error de conexión. Inténtalo de nuevo.';
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Cambiar contraseña';
+  }
+}
+
+document.getElementById('user-pwd-btn').addEventListener('click', openUserPwdModal);
+document.getElementById('user-pwd-close').addEventListener('click', closeUserPwdModal);
+document.getElementById('user-pwd-overlay').addEventListener('click', closeUserPwdModal);
+document.getElementById('user-pwd-save').addEventListener('click', submitUserPwdChange);
+document.getElementById('user-pwd-confirm').addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitUserPwdChange();
+});
+
