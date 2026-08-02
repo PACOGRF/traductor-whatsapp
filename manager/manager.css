@@ -1721,24 +1721,27 @@ body {
 /* ═══════════ ACK "LEIDO Y ENTENDIDO" ═══════════ */
 
 #ack-toggle-btn {
-  width: 32px; height: 32px;
-  border-radius: 50%;
-  border: 2px solid #ccc;
-  background: white;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: all 0.15s;
-  color: #888;
-}
-#ack-toggle-btn svg { width: 16px; height: 16px; }
-#ack-toggle-btn:hover { border-color: var(--green-mid); color: var(--green-mid); }
-#ack-toggle-btn.active {
-  background: var(--green-dark);
-  border-color: var(--green-dark);
-  color: white;
+  background: none; border: none; cursor: pointer;
+  padding: 4px; flex-shrink: 0;
+  display: flex; align-items: center;
 }
 #ack-toggle-btn.hidden { display: none; }
+
+.toggle-track {
+  display: block; width: 40px; height: 22px;
+  border-radius: 11px; background: #ccc;
+  position: relative; transition: background 0.2s;
+  flex-shrink: 0;
+}
+.toggle-thumb {
+  display: block; width: 18px; height: 18px;
+  border-radius: 50%; background: white;
+  position: absolute; top: 2px; left: 2px;
+  transition: left 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+#ack-toggle-btn.active .toggle-track { background: var(--green-mid); }
+#ack-toggle-btn.active .toggle-thumb { left: 20px; }
 
 .msg-ack-btn {
   display: block;
