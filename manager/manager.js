@@ -502,7 +502,7 @@ const NEXT_STATUS   = { pending: 'in_progress', in_progress: 'done', done: 'pend
 
 async function loadUsers() {
   const rows = await apiFetch('/api/users');
-  if (Array.isArray(rows)) state.users = rows;
+  if (Array.isArray(rows)) { state.users = rows; window._cachedUsers = rows; }
 }
 
 async function loadTasks() {
