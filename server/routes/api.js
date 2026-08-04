@@ -13,6 +13,25 @@ async function sendPush(app, payload) {
   }
 }
 
+async function sendPushToUsers(userIds, payload) {
+  if (!process.env.VAPID_PUBLIC_KEY || !userIds || !userIds.length) return;
+  const qmarks = userIds.map(() => '?').join(',');
+  const rows = await db.all(
+    `SELECT user_id, subscription FROM push_subscriptions WHERE user_id IN (${qmarks})`,
+    userIds
+  );
+  for (const row of rows) {
+    try {
+      const sub = typeof row.subscription === 'string' ? JSON.parse(row.subscription) : row.subscription;
+      await webpush.sendNotification(sub, JSON.stringify(payload));
+    } catch (err) {
+      if (err.statusCode === 410) {
+        db.run('DELETE FROM push_subscriptions WHERE user_id = ?', [row.user_id]).catch(() => {});
+      }
+    }
+  }
+}
+
 // Listar todas las conversaciones (clientes + chats internos del usuario)
 router.get('/conversations', async (req, res) => {
   try {
@@ -345,6 +364,22 @@ router.post('/tasks', async (req, res) => {
     await logAudit(req.user?.company_id, req.user?.user_id, 'task_created',
       { task_id: row.id, conversation_id: conversation_id || null });
 
+    const creatorId = req.user?.user_id || null;
+    if (assigned_to && assigned_to !== creatorId) {
+      const io = req.app.get('io');
+      if (io) io.to(`user_${assigned_to}`).emit('task_assigned', {
+        task_id: row.id,
+        conversation_id: row.conversation_id,
+        text: row.message_text,
+        assigned_by: req.user?.username || 'Gestor',
+      });
+      await sendPushToUsers([assigned_to], {
+        title: '📋 Nueva tarea asignada',
+        body: (row.message_text || '').slice(0, 100),
+        tag: 'task-assigned-' + row.id,
+      });
+    }
+
     emitTasksChanged(req);
     res.json(row);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -405,6 +440,25 @@ router.put('/tasks/:id', async (req, res) => {
        confirm_user_ids !== undefined ? (confirm_user_ids && confirm_user_ids.length ? confirm_user_ids : null) : task.confirm_user_ids,
        req.params.id]
     );
+
+    const newAssignee = assigned_to !== undefined ? assigned_to : task.assigned_to;
+    const editorId = req.user?.user_id || null;
+    if (newAssignee && newAssignee !== task.assigned_to && newAssignee !== editorId) {
+      const taskText = text !== undefined ? text : task.message_text;
+      const io = req.app.get('io');
+      if (io) io.to(`user_${newAssignee}`).emit('task_assigned', {
+        task_id: Number(req.params.id),
+        conversation_id: task.conversation_id,
+        text: taskText,
+        assigned_by: req.user?.username || 'Gestor',
+      });
+      await sendPushToUsers([newAssignee], {
+        title: '📋 Tarea asignada',
+        body: (taskText || '').slice(0, 100),
+        tag: 'task-assigned-' + req.params.id,
+      });
+    }
+
     emitTasksChanged(req);
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }

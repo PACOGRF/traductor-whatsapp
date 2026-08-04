@@ -151,6 +151,23 @@ socket.on('contact_pending', ({ conversation_id, name, phone }) => {
 // Las tareas o alertas cambiaron en el servidor (otro panel, el cron…)
 socket.on('tasks_changed', async () => { await loadTasks(); await loadAlerts(); });
 
+// Notificación al empleado: se le ha asignado una tarea
+socket.on('task_assigned', async ({ text, assigned_by }) => {
+  const by = assigned_by || 'Gestor';
+  const preview = text ? ': ' + text.slice(0, 60) : '';
+  showToast(`📋 ${by} te ha asignado una tarea${preview}`, 6000);
+  await loadTasks();
+  await loadAlerts();
+});
+
+// Notificación al empleado: vence la alerta de una tarea asignada
+socket.on('task_reminder', async ({ text }) => {
+  const preview = text ? ': ' + text.slice(0, 60) : '';
+  showToast(`⏰ Alerta de tarea${preview}`, 6000);
+  await loadTasks();
+  await loadAlerts();
+});
+
 // Nota anclada nueva en la conversación abierta
 socket.on('note_added', ({ message_id }) => {
   if (state.messages.find(m => m.id === message_id)) loadNotes(state.activeConvId);

@@ -3,6 +3,25 @@ const db = require('../db/db');
 const webpush = require('web-push');
 const { translateOutgoing, insertOutgoingMessage, sendViaChannel } = require('./messaging');
 
+async function sendPushToUsers(userIds, payload) {
+  if (!process.env.VAPID_PUBLIC_KEY || !userIds || !userIds.length) return;
+  const qmarks = userIds.map(() => '?').join(',');
+  const rows = await db.all(
+    `SELECT user_id, subscription FROM push_subscriptions WHERE user_id IN (${qmarks})`,
+    userIds
+  );
+  for (const row of rows) {
+    try {
+      const sub = typeof row.subscription === 'string' ? JSON.parse(row.subscription) : row.subscription;
+      await webpush.sendNotification(sub, JSON.stringify(payload));
+    } catch (err) {
+      if (err.statusCode === 410) {
+        db.run('DELETE FROM push_subscriptions WHERE user_id = ?', [row.user_id]).catch(() => {});
+      }
+    }
+  }
+}
+
 // Aviso push al gestor (misma suscripción que usa el resto de la app)
 async function sendPush(app, payload) {
   const sub = app && app.get('pushSubscription');
@@ -99,10 +118,21 @@ async function processAlerts(io, app) {
     for (const t of dueTasks) {
       if (new Date(t.remind_at).getTime() > now) continue;
       const client = t.contact_name || t.conv_guest_name || t.guest_name || '';
-      await sendPush(app, {
-        title: '⏰ Alerta de tarea' + (t.high_priority ? ' 🔴' : ''),
-        body: (client ? client + ': ' : '') + (t.message_text || '').slice(0, 120),
-      });
+      const alertTitle = '⏰ Alerta de tarea' + (t.high_priority ? ' 🔴' : '');
+      const alertBody = (client ? client + ': ' : '') + (t.message_text || '').slice(0, 120);
+      await sendPush(app, { title: alertTitle, body: alertBody });
+      if (t.assigned_to) {
+        if (io) io.to(`user_${t.assigned_to}`).emit('task_reminder', {
+          task_id: t.id,
+          conversation_id: t.conversation_id,
+          text: t.message_text,
+        });
+        await sendPushToUsers([t.assigned_to], {
+          title: alertTitle,
+          body: alertBody,
+          tag: 'task-reminder-' + t.id,
+        });
+      }
       await db.run('UPDATE tasks SET remind_sent_at = CURRENT_TIMESTAMP WHERE id = ?', [t.id]);
       if (io) io.emit('tasks_changed');
       console.log('⏰ Alerta enviada de la tarea #' + t.id);

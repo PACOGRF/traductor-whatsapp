@@ -46,6 +46,9 @@ function registerChatHandlers(io, app) {
   io.on('connection', (socket) => {
     console.log('Panel del gestor conectado:', socket.id);
 
+    // Sala individual para eventos dirigidos a este usuario
+    if (socket.user?.user_id) socket.join(`user_${socket.user.user_id}`);
+
     socket.on('join_room', (phoneNumberId) => {
       if (phoneNumberId) socket.join(phoneNumberId);
     });
