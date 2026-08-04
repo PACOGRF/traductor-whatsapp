@@ -524,7 +524,26 @@ async function loadUsers() {
 
 async function loadTasks() {
   const rows = await apiFetch('/api/tasks');
-  if (Array.isArray(rows)) { state.tasks = rows; renderConvTasks(); renderTasksScreen(); }
+  if (Array.isArray(rows)) { state.tasks = rows; renderConvTasks(); renderMyTasks(); renderTasksScreen(); }
+}
+
+function renderMyTasks() {
+  const header = $('my-tasks-header');
+  const list   = $('my-tasks-list');
+  if (!header || !list) return;
+  const myId = Number(localStorage.getItem('chatlink_user_id'));
+  if (!myId) { header.classList.add('hidden'); list.classList.add('hidden'); return; }
+  // Tareas asignadas a mí que NO están en la conversación activa (esas ya aparecen arriba)
+  const tasks = state.tasks.filter(t =>
+    t.assigned_to === myId &&
+    t.status !== 'done' &&
+    t.conversation_id !== state.activeConvId
+  );
+  if (!tasks.length) { header.classList.add('hidden'); list.classList.add('hidden'); return; }
+  header.classList.remove('hidden');
+  list.classList.remove('hidden');
+  list.innerHTML = tasks.map(t => taskCardHtml(t, false)).join('');
+  wireTaskCardEvents(list);
 }
 
 async function loadAlerts() {
@@ -923,6 +942,7 @@ async function selectConversation(id) {
   await loadScheduled(id);
   await loadNotes(id);
   renderConvTasks();
+  renderMyTasks();
   markMessagesRead(id);
 
   // Propuesta de ficha pendiente (llegó estando desconectado): preguntar ahora

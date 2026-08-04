@@ -1567,6 +1567,17 @@ body {
 .status-dot.inactive { background: #bdbdbd; }
 
 /* ── Cabecera alertas: verde oscuro + texto rojo ── */
+#my-tasks-header {
+  background: var(--green-mid);
+  color: #fff;
+  padding: 6px 1rem; font-size: 0.74rem; font-weight: 700;
+  letter-spacing: 0.06em; flex-shrink: 0;
+  display: flex; align-items: center;
+}
+#my-tasks-header.hidden { display: none; }
+#my-tasks-list { overflow-y: auto; flex-shrink: 0; max-height: 40%; }
+#my-tasks-list.hidden { display: none; }
+
 #alerts-header {
   background: var(--green-dark) !important;
   color: #ef5350 !important;
