@@ -155,7 +155,7 @@ socket.on('tasks_changed', async () => { await loadTasks(); await loadAlerts(); 
 socket.on('task_assigned', async ({ text, assigned_by }) => {
   const by = assigned_by || 'Gestor';
   const preview = text ? ': ' + text.slice(0, 60) : '';
-  showToast(`📋 ${by} te ha asignado una tarea${preview}`, 6000);
+  showBanner(`${by} te ha asignado una tarea${preview}`, 'assigned');
   await loadTasks();
   await loadAlerts();
 });
@@ -163,7 +163,7 @@ socket.on('task_assigned', async ({ text, assigned_by }) => {
 // Notificación al empleado: vence la alerta de una tarea asignada
 socket.on('task_reminder', async ({ text }) => {
   const preview = text ? ': ' + text.slice(0, 60) : '';
-  showToast(`⏰ Alerta de tarea${preview}`, 6000);
+  showBanner(`Alerta de tarea${preview}`, 'reminder');
   await loadTasks();
   await loadAlerts();
 });
@@ -1640,6 +1640,20 @@ function showToast(msg, duration = 2500) {
   toast.textContent = msg;
   toast.classList.add('show');
   setTimeout(() => toast.classList.remove('show'), duration);
+}
+
+const SVG_TASK = `<svg viewBox="0 0 24 24"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm-2 14l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>`;
+const SVG_CLOCK = `<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/></svg>`;
+
+function showBanner(msg, type) {
+  const banner = document.getElementById('task-banner');
+  document.getElementById('task-banner-icon').innerHTML = type === 'reminder' ? SVG_CLOCK : SVG_TASK;
+  document.getElementById('task-banner-text').textContent = msg.toUpperCase();
+  banner.classList.remove('hidden');
+}
+
+function hideBanner() {
+  document.getElementById('task-banner').classList.add('hidden');
 }
 
 function esc(str) {

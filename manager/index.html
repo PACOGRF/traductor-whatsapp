@@ -659,6 +659,13 @@
 <!-- Toast -->
 <div id="toast"></div>
 
+<!-- Banner persistente de tarea (empleado lo cierra manualmente) -->
+<div id="task-banner" class="hidden">
+  <span id="task-banner-icon"></span>
+  <span id="task-banner-text"></span>
+  <button id="task-banner-close" onclick="hideBanner()">✕</button>
+</div>
+
 <script src="/socket.io/socket.io.js"></script>
 <script src="/config.js"></script>
 <script src="manager.js"></script>
