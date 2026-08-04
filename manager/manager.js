@@ -2072,15 +2072,19 @@ async function searchConvMessages(q) {
 function renderTaskConfirmUsers(show, selectedIds) {
   const wrap = $('task-confirm-users');
   const list = $('task-confirm-user-list');
-  if (!show) { wrap.classList.add('hidden'); return; }
-  wrap.classList.remove('hidden');
+  // Normalizar: puede llegar como string JSON desde la BD
+  const ids = Array.isArray(selectedIds) ? selectedIds
+    : (typeof selectedIds === 'string' ? JSON.parse(selectedIds || '[]') : []);
+  // Siempre re-renderizar para evitar estado sucio del DOM
   const users = window._cachedUsers || [];
   list.innerHTML = users.map(u =>
     `<label class="task-check-row" style="font-size:0.83rem">
-      <input type="checkbox" value="${u.id}" ${(selectedIds || []).includes(u.id) ? 'checked' : ''}>
+      <input type="checkbox" value="${u.id}" ${ids.includes(u.id) ? 'checked' : ''}>
       <span>${esc(u.first_name + ' ' + (u.last_name || ''))}</span>
     </label>`
   ).join('');
+  if (!show) { wrap.classList.add('hidden'); return; }
+  wrap.classList.remove('hidden');
 }
 
 async function confirmTask(taskId) {
