@@ -720,7 +720,8 @@
     notifBtn.style.background = 'rgba(37,211,102,0.3)';
   } else if (Notification.permission === 'denied') {
     setDenied();
-  } else if (Notification.permission === 'default') {
+  } else {
+    // 'default' o 'granted' sin suscripción activa (p.ej. tras nuevo deploy)
     notifBtn.style.display = 'block';
     notifBtn.textContent = '🔕 Avisos desactivados';
   }
