@@ -695,6 +695,12 @@
     notifBtn.style.background = 'rgba(37,211,102,0.3)';
   }
 
+  function setDenied() {
+    notifBtn.style.display = 'block';
+    notifBtn.textContent = '🔕 Permiso denegado';
+    notifBtn.style.background = 'rgba(255,80,80,0.25)';
+  }
+
   const existing = await reg.pushManager.getSubscription();
   if (existing) {
     await fetch('/api/push-subscribe', {
@@ -705,14 +711,20 @@
     notifBtn.style.display = 'block';
     notifBtn.textContent = '🔔 Avisos activados';
     notifBtn.style.background = 'rgba(37,211,102,0.3)';
+  } else if (Notification.permission === 'denied') {
+    setDenied();
   } else if (Notification.permission === 'default') {
     notifBtn.style.display = 'block';
   }
 
   notifBtn.addEventListener('click', async () => {
+    if (Notification.permission === 'denied') {
+      showToast('Para activar avisos: haz clic en el 🔒 de la barra de dirección → Notificaciones → Permitir, y recarga la página.');
+      return;
+    }
     const perm = await Notification.requestPermission();
     if (perm === 'granted') await subscribe();
-    else notifBtn.textContent = '🔕 Permiso denegado';
+    else setDenied();
   });
 })();
 </script>
