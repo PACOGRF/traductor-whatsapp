@@ -119,6 +119,9 @@ socket.on('message_sent', ({ conversation, message }) => {
     conv.last_direction = 'outgoing';
     conv.unanswered_hours = null;
     renderConvList();
+  } else {
+    // Conversación nueva (p.ej. bienvenida automática Telegram deep link): recargar lista
+    loadConversations();
   }
   loadAlerts();
 });
