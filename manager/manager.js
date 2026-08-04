@@ -948,7 +948,6 @@ async function selectConversation(id) {
   markMessagesRead(id);
 
   // Propuesta de ficha pendiente: solo para gestor/supervisor (crear fichas es acción de gestión)
-  const myRole = localStorage.getItem('chatlink_role');
   if (conv.pending_contact && !conv.contact_id && (myRole === 'manager' || myRole === 'supervisor')) {
     openContactModal(conv.id, conv.pending_contact);
   }
