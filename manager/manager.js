@@ -144,7 +144,8 @@ socket.on('contact_saved', ({ conversation_id, name, phone }) => {
 // Un cliente compartió su contacto: preguntar al gestor si crear la ficha
 socket.on('contact_pending', ({ conversation_id, name, phone }) => {
   const conv = state.conversations.find(c => c.id === conversation_id);
-  if (conv) conv.pending_contact = { name, phone };
+  if (!conv) return; // el usuario no tiene acceso a esta conversación
+  conv.pending_contact = { name, phone };
   openContactModal(conversation_id, { name, phone });
 });
 
@@ -945,8 +946,9 @@ async function selectConversation(id) {
   renderMyTasks();
   markMessagesRead(id);
 
-  // Propuesta de ficha pendiente (llegó estando desconectado): preguntar ahora
-  if (conv.pending_contact && !conv.contact_id) {
+  // Propuesta de ficha pendiente: solo para gestor/supervisor (crear fichas es acción de gestión)
+  const myRole = localStorage.getItem('chatlink_role');
+  if (conv.pending_contact && !conv.contact_id && (myRole === 'manager' || myRole === 'supervisor')) {
     openContactModal(conv.id, conv.pending_contact);
   }
 }
