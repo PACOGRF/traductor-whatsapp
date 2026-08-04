@@ -722,6 +722,7 @@
     setDenied();
   } else if (Notification.permission === 'default') {
     notifBtn.style.display = 'block';
+    notifBtn.textContent = '🔕 Avisos desactivados';
   }
 
   notifBtn.addEventListener('click', async () => {
