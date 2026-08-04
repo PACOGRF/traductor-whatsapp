@@ -1590,11 +1590,18 @@ body {
 
 /* -- Read receipts en mensajes -- */
 .msg-sender-name {
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: #075e54;
-  margin-bottom: 2px;
+  position: absolute;
+  bottom: 4px;
+  left: 8px;
+  font-size: 0.67rem;
+  font-style: italic;
+  color: rgba(0, 0, 0, 0.45);
   display: block;
+  max-width: 52%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1;
 }
 .msg-read-receipt {
   font-size: 0.72rem;

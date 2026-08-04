@@ -369,8 +369,9 @@ function renderMessages() {
     const myId = Number(localStorage.getItem('chatlink_user_id'));
     const isMine = isInternal ? (m.sender_user_id === myId) : (m.direction === 'outgoing');
     const cls  = isInternal ? (isMine ? 'outgoing' : 'incoming') : (m.direction === 'incoming' ? 'incoming' : 'outgoing');
-    const senderLabel = (isInternal && !isMine && m.sender_name)
-      ? `<div class="msg-sender-name">${esc(m.sender_name)}</div>` : '';
+    // Nombre del emisor: en chats internos para todos; en externos solo salientes con nombre
+    const senderLabel = m.sender_name && (isInternal || m.direction === 'outgoing')
+      ? `<span class="msg-sender-name">${esc(m.sender_name)}</span>` : '';
 
     let mainText, subText;
     if (m.direction === 'incoming') {
@@ -435,12 +436,12 @@ function renderMessages() {
 
     return `${dateDivider}
       <div class="msg-bubble ${cls}${isInternal ? ' internal' : ''}" data-msg-id="${m.id}">
-        ${senderLabel}
         <button class="msg-pin-btn" data-msg-id="${m.id}" title="Crear tarea o nota de este mensaje">${IC.pin}</button>
         ${mediaHtml}
         ${mainText ? `<div class="msg-original">${mainText}</div>` : ''}
         ${subText}
         ${ackHtml}
+        ${senderLabel}
         <span class="msg-time">${time}${readReceipt}</span>
       </div>${notesHtml}`;
   }).join('') + renderScheduledHtml();
