@@ -284,6 +284,17 @@ router.get('/users', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Perfil del usuario autenticado (role, position_id, etc.)
+router.get('/me', async (req, res) => {
+  try {
+    const user = await db.get(
+      'SELECT id, first_name, last_name, username, role, position_id FROM users WHERE id = ?',
+      [req.user.user_id]
+    );
+    res.json(user || {});
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Tareas 2.0 (Sprint 4) ──────────────────────────────
 // Aviso a otros paneles conectados de que las tareas cambiaron
 function emitTasksChanged(req) {
@@ -291,10 +302,41 @@ function emitTasksChanged(req) {
   if (io) io.emit('tasks_changed');
 }
 
-// Todas las tareas vivas (borrado lógico fuera) con nombres para mostrar
+// IDs de usuarios activos de las áreas indicadas (null = todas las áreas)
+async function getUsersInAreas(areaIds, companyId) {
+  if (!areaIds || !areaIds.length) {
+    const rows = await db.all('SELECT id FROM users WHERE company_id = ? AND active = true', [companyId]);
+    return rows.map(r => r.id);
+  }
+  const qmarks = areaIds.map(() => '?').join(',');
+  const rows = await db.all(
+    `SELECT id FROM users WHERE company_id = ? AND active = true AND position_id IN (${qmarks})`,
+    [companyId, ...areaIds]
+  );
+  return rows.map(r => r.id);
+}
+
+// Comunicados/tareas vivos (borrado lógico fuera) con nombres para mostrar
 router.get('/tasks', async (req, res) => {
   try {
     const userId = req.user?.user_id;
+    const role   = req.user?.role;
+
+    let areaWhere = '';
+    const areaParams = [];
+
+    if (role !== 'manager') {
+      const me = await db.get('SELECT position_id FROM users WHERE id = ?', [userId]);
+      const posId = me?.position_id;
+      if (posId) {
+        areaWhere = 'AND (t.notify_areas IS NULL OR t.notify_areas @> ?::jsonb OR t.assigned_to = ?)';
+        areaParams.push(JSON.stringify([posId]), userId);
+      } else {
+        areaWhere = 'AND t.assigned_to = ?';
+        areaParams.push(userId);
+      }
+    }
+
     const rows = await db.all(
       `SELECT t.*,
               c.guest_name  AS conv_guest_name,
@@ -313,9 +355,9 @@ router.get('/tasks', async (req, res) => {
          FROM task_confirmations GROUP BY task_id
        ) tcc ON tcc.task_id = t.id
        LEFT JOIN task_confirmations tc_me ON tc_me.task_id = t.id AND tc_me.user_id = ?
-       WHERE t.deleted_at IS NULL
+       WHERE t.deleted_at IS NULL ${areaWhere}
        ORDER BY t.id DESC`,
-      [userId]
+      [userId, ...areaParams]
     );
     res.json(rows.map(r => ({
       ...r,
@@ -327,12 +369,12 @@ router.get('/tasks', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Crear tarea (desde la chincheta 📌 o desde la pantalla TAREAS)
+// Crear comunicado/tarea (desde la chincheta 📌 o desde la pantalla TAREAS)
 router.post('/tasks', async (req, res) => {
   try {
     const { conversation_id, anchored_message_id, text, assigned_to,
             notify_also, high_priority, remind_at, due_at,
-            requires_confirmation, confirm_user_ids } = req.body;
+            requires_confirmation, confirm_user_ids, notify_areas } = req.body;
     if (!text || !text.trim()) return res.status(400).json({ error: 'El comentario es obligatorio' });
 
     let conv = null, guestLabel = null, contactId = null;
@@ -345,18 +387,21 @@ router.post('/tasks', async (req, res) => {
       }
     }
 
+    const notifyAreasVal = notify_areas && notify_areas.length ? notify_areas : null;
+
     await db.run(
       `INSERT INTO tasks (company_id, contact_id, conversation_id, anchored_message_id,
                           msg_id, guest_name, message_text,
                           assigned_to, notify_also, status, high_priority,
                           remind_at, due_at, created_by,
-                          requires_confirmation, confirm_user_ids)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
+                          requires_confirmation, confirm_user_ids, notify_areas)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)`,
       [req.user?.company_id || 1, contactId, conversation_id || null, anchored_message_id || null,
        anchored_message_id || null, guestLabel, text.trim(),
        assigned_to || null, notify_also && notify_also.length ? notify_also : null,
        !!high_priority, remind_at || null, due_at || null, req.user?.user_id || null,
-       !!requires_confirmation, confirm_user_ids && confirm_user_ids.length ? confirm_user_ids : null]
+       !!requires_confirmation, confirm_user_ids && confirm_user_ids.length ? confirm_user_ids : null,
+       notifyAreasVal]
     );
     const row = await db.get('SELECT * FROM tasks ORDER BY id DESC LIMIT 1');
 
@@ -364,17 +409,29 @@ router.post('/tasks', async (req, res) => {
     await logAudit(req.user?.company_id, req.user?.user_id, 'task_created',
       { task_id: row.id, conversation_id: conversation_id || null });
 
+    // Notificar a todos los usuarios de las áreas seleccionadas + responsable
+    const companyId = req.user?.company_id || 1;
     const creatorId = req.user?.user_id || null;
-    if (assigned_to && assigned_to !== creatorId) {
+    const areaUserIds = await getUsersInAreas(notify_areas, companyId);
+    const toNotifySet = new Set(areaUserIds);
+    if (assigned_to) toNotifySet.add(assigned_to);
+    toNotifySet.delete(creatorId);
+    const toNotify = [...toNotifySet].filter(Boolean);
+
+    if (toNotify.length) {
       const io = req.app.get('io');
-      if (io) io.to(`user_${assigned_to}`).emit('task_assigned', {
-        task_id: row.id,
-        conversation_id: row.conversation_id,
-        text: row.message_text,
-        assigned_by: req.user?.username || 'Gestor',
-      });
-      await sendPushToUsers([assigned_to], {
-        title: '📋 Nueva tarea asignada',
+      if (io) {
+        for (const uid of toNotify) {
+          io.to(`user_${uid}`).emit('task_assigned', {
+            task_id: row.id,
+            conversation_id: row.conversation_id,
+            text: row.message_text,
+            assigned_by: req.user?.username || 'Gestor',
+          });
+        }
+      }
+      await sendPushToUsers(toNotify, {
+        title: '📋 Nuevo comunicado/tarea',
         body: (row.message_text || '').slice(0, 100),
         tag: 'task-assigned-' + row.id,
       });
@@ -421,13 +478,13 @@ router.put('/tasks/:id', async (req, res) => {
     if (!task) return res.status(404).json({ error: 'No encontrada' });
 
     const { text, assigned_to, notify_also, high_priority, remind_at, due_at,
-            requires_confirmation, confirm_user_ids } = req.body;
+            requires_confirmation, confirm_user_ids, notify_areas } = req.body;
     const remindChanged = (remind_at || null) !== (task.remind_at ? new Date(task.remind_at).toISOString() : null);
 
     await db.run(
       `UPDATE tasks SET message_text = ?, assigned_to = ?, notify_also = ?,
               high_priority = ?, remind_at = ?, due_at = ?,
-              requires_confirmation = ?, confirm_user_ids = ?
+              requires_confirmation = ?, confirm_user_ids = ?, notify_areas = ?
               ${remindChanged ? ', remind_sent_at = NULL' : ''}
        WHERE id = ?`,
       [text !== undefined ? text : task.message_text,
@@ -438,6 +495,7 @@ router.put('/tasks/:id', async (req, res) => {
        due_at !== undefined ? due_at : task.due_at,
        requires_confirmation !== undefined ? !!requires_confirmation : task.requires_confirmation,
        confirm_user_ids !== undefined ? (confirm_user_ids && confirm_user_ids.length ? confirm_user_ids : null) : task.confirm_user_ids,
+       notify_areas !== undefined ? (notify_areas && notify_areas.length ? notify_areas : null) : task.notify_areas,
        req.params.id]
     );
 
@@ -453,7 +511,7 @@ router.put('/tasks/:id', async (req, res) => {
         assigned_by: req.user?.username || 'Gestor',
       });
       await sendPushToUsers([newAssignee], {
-        title: '📋 Tarea asignada',
+        title: '📋 Comunicado/Tarea asignado',
         body: (taskText || '').slice(0, 100),
         tag: 'task-assigned-' + req.params.id,
       });

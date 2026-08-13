@@ -118,7 +118,7 @@ async function processAlerts(io, app) {
     for (const t of dueTasks) {
       if (new Date(t.remind_at).getTime() > now) continue;
       const client = t.contact_name || t.conv_guest_name || t.guest_name || '';
-      const alertTitle = '⏰ Alerta de tarea' + (t.high_priority ? ' 🔴' : '');
+      const alertTitle = '⏰ Alerta de comunicado/tarea' + (t.high_priority ? ' 🔴' : '');
       const alertBody = (client ? client + ': ' : '') + (t.message_text || '').slice(0, 120);
       await sendPush(app, { title: alertTitle, body: alertBody });
       if (t.assigned_to) {

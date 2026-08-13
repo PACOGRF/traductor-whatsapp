@@ -159,7 +159,7 @@ socket.on('tasks_changed', async () => { await loadTasks(); await loadAlerts(); 
 socket.on('task_assigned', async ({ text, assigned_by }) => {
   const by = assigned_by || 'Gestor';
   const preview = text ? ': ' + text.slice(0, 60) : '';
-  showBanner(`${by} te ha asignado una tarea${preview}`, 'assigned');
+  showBanner(`${by} te ha asignado un comunicado/tarea${preview}`, 'assigned');
   await loadTasks();
   await loadAlerts();
 });
@@ -167,7 +167,7 @@ socket.on('task_assigned', async ({ text, assigned_by }) => {
 // Notificación al empleado: vence la alerta de una tarea asignada
 socket.on('task_reminder', async ({ text }) => {
   const preview = text ? ': ' + text.slice(0, 60) : '';
-  showBanner(`Alerta de tarea${preview}`, 'reminder');
+  showBanner(`Alerta de comunicado/tarea${preview}`, 'reminder');
   await loadTasks();
   await loadAlerts();
 });
@@ -439,7 +439,7 @@ function renderMessages() {
 
     return `${dateDivider}
       <div class="msg-bubble ${cls}${isInternal ? ' internal' : ''}" data-msg-id="${m.id}">
-        <button class="msg-pin-btn" data-msg-id="${m.id}" title="Crear tarea o nota de este mensaje">${IC.pin}</button>
+        <button class="msg-pin-btn" data-msg-id="${m.id}" title="Crear comunicado/tarea o nota de este mensaje">${IC.pin}</button>
         ${mediaHtml}
         ${mainText ? `<div class="msg-original">${mainText}</div>` : ''}
         ${subText}
@@ -523,8 +523,14 @@ const STATUS_LABELS = { pending: 'PENDIENTE', in_progress: 'EN CURSO', done: 'RE
 const NEXT_STATUS   = { pending: 'in_progress', in_progress: 'done', done: 'pending' };
 
 async function loadUsers() {
-  const rows = await apiFetch('/api/users');
+  const [rows, positions, me] = await Promise.all([
+    apiFetch('/api/users'),
+    apiFetch('/api/positions'),
+    apiFetch('/api/me'),
+  ]);
   if (Array.isArray(rows)) { state.users = rows; window._cachedUsers = rows; }
+  if (Array.isArray(positions)) window._cachedPositions = positions;
+  if (me && me.id) window._myProfile = me;
 }
 
 async function loadTasks() {
@@ -585,9 +591,9 @@ async function changeStatus(id, current) {
 }
 
 async function deleteTask(id) {
-  if (!confirm('¿Eliminar esta tarea? (quedará en el histórico)')) return;
+  if (!confirm('¿Eliminar este comunicado/tarea? (quedará en el histórico)')) return;
   const r = await apiFetch(`/api/tasks/${id}`, { method: 'DELETE' });
-  if (r) { await loadTasks(); await loadAlerts(); showToast('Tarea eliminada 🗑️'); }
+  if (r) { await loadTasks(); await loadAlerts(); showToast('Comunicado/tarea eliminado 🗑️'); }
 }
 
 function taskCardHtml(t, showClient) {
@@ -692,8 +698,58 @@ async function gotoMessage(convId, msgId) {
 let taskModalCtx = {};   // { messageId?, taskId?, fromScreen? }
 
 function fillUserSelect(sel, selectedId) {
-  sel.innerHTML = '<option value="">— Sin responsable —</option>' + state.users.map(u =>
+  const allUsers = window._cachedUsers || state.users;
+  const myRole  = window._myProfile?.role;
+  const myPosId = window._myProfile?.position_id;
+  // Gestor ve a todos; el resto ve solo su área + gestores
+  const filtered = myRole === 'manager'
+    ? allUsers
+    : allUsers.filter(u => u.position_id === myPosId || u.role === 'manager');
+  sel.innerHTML = '<option value="">— Sin responsable —</option>' + filtered.map(u =>
     `<option value="${u.id}" ${selectedId === u.id ? 'selected' : ''}>${esc((u.last_name ? u.last_name + ', ' : '') + u.first_name)}</option>`).join('');
+}
+
+// ── Áreas de notificación en el modal de comunicado/tarea ──
+function getSelectedNotifyAreaIds() {
+  return Array.from($('task-area-checkboxes').querySelectorAll('.task-area-cb:checked'))
+    .map(cb => Number(cb.value));
+}
+
+function updateAllAreasToggle() {
+  const total = ($('task-area-checkboxes').querySelectorAll('.task-area-cb') || []).length;
+  const checked = getSelectedNotifyAreaIds().length;
+  $('task-all-areas').checked = total > 0 && checked === total;
+}
+
+function renderTaskAreaCheckboxes(savedAreaIds) {
+  const positions = window._cachedPositions || [];
+  const myRole  = window._myProfile?.role;
+  const myPosId = window._myProfile?.position_id;
+
+  // Default: gestor → todas; resto → solo su área
+  let defaultIds;
+  if (savedAreaIds !== undefined && savedAreaIds !== null) {
+    const arr = Array.isArray(savedAreaIds) ? savedAreaIds
+      : (typeof savedAreaIds === 'string' ? JSON.parse(savedAreaIds || '[]') : []);
+    defaultIds = arr.map(Number);
+  } else {
+    defaultIds = myRole === 'manager' ? positions.map(p => p.id) : (myPosId ? [myPosId] : []);
+  }
+
+  const container = $('task-area-checkboxes');
+  container.innerHTML = positions.map(p => `
+    <label class="task-check-row" style="font-size:0.83rem">
+      <input type="checkbox" class="task-area-cb" value="${p.id}" ${defaultIds.includes(p.id) ? 'checked' : ''}>
+      <span>${esc(p.name)}</span>
+    </label>`).join('');
+
+  container.querySelectorAll('.task-area-cb').forEach(cb => {
+    cb.addEventListener('change', () => {
+      updateAllAreasToggle();
+      if ($('task-requires-confirm').checked) renderTaskConfirmUsers(true, []);
+    });
+  });
+  updateAllAreasToggle();
 }
 
 function openTaskModal(ctx = {}) {
@@ -702,8 +758,8 @@ function openTaskModal(ctx = {}) {
   const task = isEdit ? state.tasks.find(t => t.id === ctx.taskId) : null;
   const anchoredMsg = ctx.messageId ? state.messages.find(m => m.id === ctx.messageId) : null;
 
-  $('task-title').innerHTML = isEdit ? `${IC.edit} Editar tarea` : `${IC.pin} Nueva tarea`;
-  $('task-save').textContent  = isEdit ? 'Guardar cambios' : 'Guardar tarea';
+  $('task-title').innerHTML = isEdit ? `${IC.edit} Editar comunicado/tarea` : `${IC.pin} Nuevo comunicado/tarea`;
+  $('task-save').textContent  = isEdit ? 'Guardar cambios' : 'Guardar';
 
   const prev = $('task-anchored-preview');
   if (anchoredMsg) {
@@ -734,6 +790,9 @@ function openTaskModal(ctx = {}) {
   else { rc.classList.add('hidden'); rc.value = ''; }
   $('task-due').value = task && task.due_at ? toLocalInputValue(new Date(task.due_at)) : '';
   $('task-priority').checked = task ? !!task.high_priority : false;
+
+  // Áreas a notificar (primero, para que getSelectedNotifyAreaIds funcione al renderizar confirmaciones)
+  renderTaskAreaCheckboxes(task ? task.notify_areas : undefined);
 
   // Confirmación de lectura obligatoria
   const reqConfirm = task ? !!task.requires_confirmation : false;
@@ -782,6 +841,7 @@ async function saveTaskModal() {
   const confirmIds = requiresConfirm
     ? Array.from($('task-confirm-user-list').querySelectorAll('input[type=checkbox]:checked')).map(cb => Number(cb.value))
     : [];
+  const notifyAreas = getSelectedNotifyAreaIds();
   const body = {
     text,
     assigned_to: Number($('task-assigned').value) || null,
@@ -790,6 +850,7 @@ async function saveTaskModal() {
     due_at: $('task-due').value ? new Date($('task-due').value).toISOString() : null,
     requires_confirmation: requiresConfirm,
     confirm_user_ids: confirmIds,
+    notify_areas: notifyAreas.length ? notifyAreas : null,
   };
 
   let r;
@@ -824,6 +885,11 @@ $('task-remind').addEventListener('change', () =>
   $('task-remind-custom').classList.toggle('hidden', $('task-remind').value !== 'custom'));
 $('task-requires-confirm').addEventListener('change', () =>
   renderTaskConfirmUsers($('task-requires-confirm').checked, []));
+$('task-all-areas').addEventListener('change', () => {
+  const all = $('task-all-areas').checked;
+  $('task-area-checkboxes').querySelectorAll('.task-area-cb').forEach(cb => { cb.checked = all; });
+  if ($('task-requires-confirm').checked) renderTaskConfirmUsers(true, []);
+});
 
 /* ── Pantalla TAREAS (tabla completa) ────────────────── */
 function openTasksScreen() { $('tasks-screen').classList.remove('hidden'); renderTasksScreen(); }
@@ -2078,13 +2144,17 @@ function renderTaskConfirmUsers(show, selectedIds) {
   const wrap = $('task-confirm-users');
   const list = $('task-confirm-user-list');
   // Normalizar: puede llegar como string JSON desde la BD
-  const ids = Array.isArray(selectedIds) ? selectedIds
-    : (typeof selectedIds === 'string' ? JSON.parse(selectedIds || '[]') : []);
-  // Siempre re-renderizar para evitar estado sucio del DOM
-  const users = window._cachedUsers || [];
+  const ids = Array.isArray(selectedIds) ? selectedIds.map(Number)
+    : (typeof selectedIds === 'string' ? JSON.parse(selectedIds || '[]').map(Number) : []);
+  // Solo usuarios de las áreas marcadas en "Notificar a"
+  const allUsers = window._cachedUsers || [];
+  const selectedAreaIds = getSelectedNotifyAreaIds();
+  const users = selectedAreaIds.length
+    ? allUsers.filter(u => selectedAreaIds.includes(u.position_id))
+    : allUsers;
   list.innerHTML = users.map(u =>
     `<label class="task-check-row" style="font-size:0.83rem">
-      <input type="checkbox" value="${u.id}" ${ids.includes(u.id) ? 'checked' : ''}>
+      <input type="checkbox" value="${u.id}" ${ids.includes(Number(u.id)) ? 'checked' : ''}>
       <span>${esc(u.first_name + ' ' + (u.last_name || ''))}</span>
     </label>`
   ).join('');
