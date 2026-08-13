@@ -1222,8 +1222,9 @@ body {
   background: #04443d;
   display: flex; align-items: stretch; gap: 2px;
   padding: 0 0.5rem; flex-shrink: 0;
-  overflow-x: auto;
+  overflow-x: auto; scrollbar-width: none;
 }
+#top-banner::-webkit-scrollbar { display: none; }
 .nav-btn {
   background: none; border: none; color: rgba(255,255,255,0.75);
   font-size: 0.74rem; font-weight: 700; letter-spacing: 0.06em;
@@ -1233,6 +1234,12 @@ body {
 .nav-btn:hover { color: white; }
 .nav-btn.active { color: white; border-bottom-color: var(--green-light); }
 .nav-btn.nav-soon { opacity: 0.4; cursor: not-allowed; }
+/* Etiquetas responsivas: corta en móvil, larga en escritorio */
+.nav-short { display: none; }
+@media (max-width: 520px) {
+  .nav-long  { display: none; }
+  .nav-short { display: inline; }
+}
 .nav-btn.hidden { display: none; }
 
 /* El área principal cede el alto del banner (override append-only) */
