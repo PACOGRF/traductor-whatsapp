@@ -1228,15 +1228,15 @@ body {
 .nav-btn {
   background: none; border: none; color: rgba(255,255,255,0.75);
   font-size: 0.74rem; font-weight: 700; letter-spacing: 0.06em;
-  padding: 9px 14px; cursor: pointer; white-space: nowrap;
+  padding: 9px 10px; cursor: pointer; white-space: nowrap;
   border-bottom: 3px solid transparent; flex-shrink: 0;
 }
 .nav-btn:hover { color: white; }
 .nav-btn.active { color: white; border-bottom-color: var(--green-light); }
 .nav-btn.nav-soon { opacity: 0.4; cursor: not-allowed; }
-/* Etiquetas responsivas: corta en móvil, larga en escritorio */
+/* Etiquetas responsivas: corta en móvil/tablet, larga en desktop */
 .nav-short { display: none; }
-@media (max-width: 520px) {
+@media (max-width: 768px) {
   .nav-long  { display: none; }
   .nav-short { display: inline; }
 }
