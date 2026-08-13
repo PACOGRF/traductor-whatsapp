@@ -1315,9 +1315,9 @@ function renderEmployees() {
 }
 
 function fillPositionSelect(selectedId) {
-  $('emp-position').innerHTML = '<option value="">— Elegir puesto —</option>' +
+  $('emp-position').innerHTML = '<option value="">— Elegir área —</option>' +
     empState.positions.map(p => `<option value="${p.id}" ${p.id === selectedId ? 'selected' : ''}>${esc(p.name)}</option>`).join('') +
-    '<option value="__new__">➕ Añadir puesto nuevo…</option>';
+    '<option value="__new__">➕ Añadir área nueva…</option>';
 }
 $('emp-position').addEventListener('change', () =>
   $('emp-position-new').classList.toggle('hidden', $('emp-position').value !== '__new__'));
@@ -1389,7 +1389,7 @@ async function saveEmployee() {
   else if (posVal) body.position_id = Number(posVal);
 
   if (!body.first_name || !body.last_name) { showToast('Nombre y apellidos son obligatorios'); return; }
-  if (!body.position_id && !body.position_name) { showToast('Elige un puesto o crea uno nuevo'); return; }
+  if (!body.position_id && !body.position_name) { showToast('Elige un área o crea una nueva'); return; }
 
   const headers = {
     'Content-Type': 'application/json',
@@ -2190,7 +2190,7 @@ function renderIntConvList() {
     const key = filter === 'role' ? 'role' : 'position_name';
     const groups = {};
     list.forEach(u => {
-      const g = u[key] || 'Sin ' + (filter === 'role' ? 'rol' : 'puesto');
+      const g = u[key] || 'Sin ' + (filter === 'role' ? 'rol' : 'área');
       if (!groups[g]) groups[g] = [];
       groups[g].push(u);
     });
@@ -2245,7 +2245,7 @@ function renderIntConvList() {
     gcb.addEventListener('change', () => {
       const gname = gcb.dataset.gname;
       const key   = intConvState.filter === 'role' ? 'role' : 'position_name';
-      const fallback = 'Sin ' + (intConvState.filter === 'role' ? 'rol' : 'puesto');
+      const fallback = 'Sin ' + (intConvState.filter === 'role' ? 'rol' : 'área');
       const groupUsers = intConvState.users.filter(u => (u[key] || fallback) === gname);
       groupUsers.forEach(u => gcb.checked ? intConvState.selected.add(u.id) : intConvState.selected.delete(u.id));
       $('intconv-list').querySelectorAll('.intconv-check').forEach(uc => {
@@ -2446,7 +2446,7 @@ function renderCfgChannels(groups, botUsername) {
 function renderCfgPositions(positions) {
   const list = $('cfg-positions-list');
   if (!positions.length) {
-    list.innerHTML = '<div class="cfg-empty">Sin puestos aún. Añade el primero abajo.</div>';
+    list.innerHTML = '<div class="cfg-empty">Sin áreas aún. Añade la primera abajo.</div>';
     return;
   }
   list.innerHTML = positions.map(p => `
@@ -2554,8 +2554,8 @@ $('cfg-position-add').addEventListener('click', async () => {
     input.value = '';
     const positions = await apiFetch('/api/positions');
     renderCfgPositions(Array.isArray(positions) ? positions : []);
-    showToast('Puesto añadido');
-  } else showToast(r?.error || 'Error al añadir puesto');
+    showToast('Área añadida');
+  } else showToast(r?.error || 'Error al añadir área');
 });
 $('cfg-position-new').addEventListener('keydown', e => { if (e.key === 'Enter') $('cfg-position-add').click(); });
 

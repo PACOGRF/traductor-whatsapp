@@ -373,7 +373,7 @@
     <div id="intconv-tabs">
       <button class="intconv-tab active" data-filter="all">Todos</button>
       <button class="intconv-tab" data-filter="role">Por rol</button>
-      <button class="intconv-tab" data-filter="position">Por puesto</button>
+      <button class="intconv-tab" data-filter="position">Por área</button>
     </div>
     <input id="intconv-search" type="search" placeholder="Buscar empleado…" autocomplete="off">
     <div id="intconv-list"></div>
@@ -399,7 +399,7 @@
   <div id="employees-table-wrap">
     <table id="employees-table">
       <thead>
-        <tr><th>Nombre y apellidos</th><th>Puesto</th><th>Usuario</th><th>Rol</th><th>Estado</th><th></th></tr>
+        <tr><th>Nombre y apellidos</th><th>Área</th><th>Usuario</th><th>Rol</th><th>Estado</th><th></th></tr>
       </thead>
       <tbody id="employees-table-body"></tbody>
     </table>
@@ -421,9 +421,9 @@
     <label for="emp-last">Apellidos*</label>
     <input id="emp-last" type="text">
 
-    <label for="emp-position">Puesto*</label>
+    <label for="emp-position">Área*</label>
     <select id="emp-position"></select>
-    <input id="emp-position-new" type="text" class="hidden" placeholder="Escribe el nombre del puesto nuevo">
+    <input id="emp-position-new" type="text" class="hidden" placeholder="Escribe el nombre del área nueva">
 
     <label for="emp-role">Rol*</label>
     <select id="emp-role">
@@ -578,10 +578,10 @@
     </section>
 
     <section class="config-section">
-      <h3 class="config-section-title">Puestos de trabajo</h3>
+      <h3 class="config-section-title">Áreas</h3>
       <div id="cfg-positions-list"></div>
       <div class="cfg-add-row">
-        <input id="cfg-position-new" type="text" placeholder="Nombre del nuevo puesto…">
+        <input id="cfg-position-new" type="text" placeholder="Nombre del nuevo área…">
         <button id="cfg-position-add" class="btn-secondary">+ Añadir</button>
       </div>
     </section>

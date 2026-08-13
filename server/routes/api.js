@@ -1465,7 +1465,7 @@ router.post('/positions', requireRole('manager'), async (req, res) => {
     if (!name) return res.status(400).json({ error: 'Nombre requerido' });
     const companyId = req.user?.company_id || 1;
     const existing = await db.get('SELECT id FROM positions WHERE company_id = ? AND LOWER(name) = LOWER(?)', [companyId, name]);
-    if (existing) return res.status(409).json({ error: 'Ya existe ese puesto' });
+    if (existing) return res.status(409).json({ error: 'Ya existe ese área' });
     await db.run('INSERT INTO positions (company_id, name) VALUES (?, ?)', [companyId, name]);
     const p = await db.get('SELECT id FROM positions WHERE company_id = ? AND LOWER(name) = LOWER(?)', [companyId, name]);
     res.json(p);
@@ -1486,7 +1486,7 @@ router.delete('/positions/:id', requireRole('manager'), async (req, res) => {
   try {
     const companyId = req.user?.company_id || 1;
     const inUse = await db.get('SELECT 1 FROM users WHERE position_id = ? AND company_id = ?', [req.params.id, companyId]);
-    if (inUse) return res.status(409).json({ error: 'Hay empleados asignados a este puesto. Cámbialo antes de borrar.' });
+    if (inUse) return res.status(409).json({ error: 'Hay empleados asignados a esta área. Cámbiala antes de borrar.' });
     await db.run('DELETE FROM positions WHERE id = ? AND company_id = ?', [req.params.id, companyId]);
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
