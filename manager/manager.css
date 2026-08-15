@@ -1641,7 +1641,23 @@ body {
   font-size: 0.78rem;
   color: #555;
 }
-.task-confirm-count { font-weight: 600; color: #075e54; }
+.task-confirm-count {
+  font-weight: 600; color: #075e54;
+  background: none; border: none; padding: 0; cursor: pointer; font-size: inherit;
+  text-decoration: underline dotted; text-underline-offset: 2px;
+}
+.task-confirm-log {
+  margin: 2px 0 4px 0;
+  padding: 6px 10px;
+  background: #f0f7f6;
+  border-left: 3px solid #075e54;
+  border-radius: 0 4px 4px 0;
+  font-size: 0.8rem;
+}
+.tcl-row { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; }
+.tcl-name { font-weight: 600; color: #075e54; }
+.tcl-dt { color: #666; font-size: 0.76rem; }
+.tcl-empty { color: #999; font-style: italic; }
 .task-confirm-btn {
   padding: 3px 10px;
   background: #075e54;

@@ -618,10 +618,11 @@ function taskCardHtml(t, showClient) {
       </div>
       ${t.requires_confirmation && t.confirm_user_ids && t.confirm_user_ids.length ? `
         <div class="task-confirm-bar">
-          <span class="task-confirm-count">${t.confirmation_count}/${t.confirm_user_ids.length} confirmado</span>
+          <button class="task-confirm-count" data-id="${t.id}" title="Ver confirmaciones">${t.confirmation_count}/${t.confirm_user_ids.length} confirmado${t.confirmation_count > 0 ? ' ▾' : ''}</button>
           ${!t.confirmed_by_me && t.confirm_user_ids.includes(Number(localStorage.getItem('chatlink_user_id'))) ? `
             <button class="task-confirm-btn" data-id="${t.id}">Confirmar lectura</button>` : ''}
-        </div>` : ''}
+        </div>
+        <div class="task-confirm-log hidden" id="task-confirm-log-${t.id}"></div>` : ''}
     </div>`;
 }
 
@@ -636,6 +637,8 @@ function wireTaskCardEvents(rootEl) {
     b.addEventListener('click', () => gotoMessage(Number(b.dataset.conv), Number(b.dataset.msg))));
   rootEl.querySelectorAll('.task-confirm-btn').forEach(b =>
     b.addEventListener('click', () => confirmTask(Number(b.dataset.id))));
+  rootEl.querySelectorAll('.task-confirm-count').forEach(b =>
+    b.addEventListener('click', () => toggleConfirmLog(Number(b.dataset.id))));
 }
 
 // Mitad superior derecha: tareas (no realizadas) de la conversación abierta
@@ -2187,6 +2190,27 @@ async function confirmTask(taskId) {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
   });
   if (r) { await loadTasks(); showToast('Lectura confirmada'); }
+}
+
+async function toggleConfirmLog(taskId) {
+  const log = document.getElementById(`task-confirm-log-${taskId}`);
+  if (!log) return;
+  if (!log.classList.contains('hidden')) { log.classList.add('hidden'); return; }
+  if (!log.dataset.loaded) {
+    const rows = await apiFetch(`/api/tasks/${taskId}/confirmations`);
+    if (!rows || rows.error) { log.innerHTML = '<span class="tcl-empty">Sin confirmaciones</span>'; }
+    else if (!rows.length) { log.innerHTML = '<span class="tcl-empty">Nadie ha confirmado aún</span>'; }
+    else {
+      log.innerHTML = rows.map(r => {
+        const dt = new Date(r.confirmed_at);
+        const fecha = dt.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const hora  = dt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        return `<div class="tcl-row"><span class="tcl-name">${esc(r.first_name + ' ' + (r.last_name || ''))}</span><span class="tcl-dt">${fecha} ${hora}</span></div>`;
+      }).join('');
+    }
+    log.dataset.loaded = '1';
+  }
+  log.classList.remove('hidden');
 }
 
 // -- Trazabilidad de lectura (read receipts) --
