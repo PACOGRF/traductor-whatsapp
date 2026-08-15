@@ -395,10 +395,10 @@ router.post('/tasks', async (req, res) => {
                           assigned_to, notify_also, status, high_priority,
                           remind_at, due_at, created_by,
                           requires_confirmation, confirm_user_ids, notify_areas)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, 'pending', ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb)`,
       [req.user?.company_id || 1, contactId, conversation_id || null, anchored_message_id || null,
        anchored_message_id || null, guestLabel, text.trim(),
-       assigned_to || null, notify_also && notify_also.length ? JSON.stringify(notify_also) : null,
+       assigned_to || null, notify_also && notify_also.length ? notify_also : null,
        !!high_priority, remind_at || null, due_at || null, req.user?.user_id || null,
        !!requires_confirmation,
        confirm_user_ids && confirm_user_ids.length ? JSON.stringify(confirm_user_ids) : null,
@@ -483,14 +483,14 @@ router.put('/tasks/:id', async (req, res) => {
     const remindChanged = (remind_at || null) !== (task.remind_at ? new Date(task.remind_at).toISOString() : null);
 
     await db.run(
-      `UPDATE tasks SET message_text = ?, assigned_to = ?, notify_also = ?::jsonb,
+      `UPDATE tasks SET message_text = ?, assigned_to = ?, notify_also = ?,
               high_priority = ?, remind_at = ?, due_at = ?,
               requires_confirmation = ?, confirm_user_ids = ?::jsonb, notify_areas = ?::jsonb
               ${remindChanged ? ', remind_sent_at = NULL' : ''}
        WHERE id = ?`,
       [text !== undefined ? text : task.message_text,
        assigned_to !== undefined ? assigned_to : task.assigned_to,
-       notify_also !== undefined ? (notify_also && notify_also.length ? JSON.stringify(notify_also) : null) : task.notify_also,
+       notify_also !== undefined ? (notify_also && notify_also.length ? notify_also : null) : task.notify_also,
        high_priority !== undefined ? !!high_priority : task.high_priority,
        remind_at !== undefined ? remind_at : task.remind_at,
        due_at !== undefined ? due_at : task.due_at,

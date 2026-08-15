@@ -2147,12 +2147,8 @@ function renderTaskConfirmUsers(show, selectedIds) {
 
   const ids = Array.isArray(selectedIds) ? selectedIds.map(Number)
     : (typeof selectedIds === 'string' ? JSON.parse(selectedIds || '[]').map(Number) : []);
-  const allUsers = window._cachedUsers || [];
+  const users = window._cachedUsers || [];
   const positions = window._cachedPositions || [];
-  const selectedAreaIds = getSelectedNotifyAreaIds();
-  const users = selectedAreaIds.length
-    ? allUsers.filter(u => selectedAreaIds.includes(u.position_id))
-    : allUsers;
 
   // Agrupar por área
   const groups = {};
