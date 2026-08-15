@@ -865,11 +865,11 @@ async function saveTaskModal() {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
   }
-  if (r) {
+  if (r && !r.error) {
     closeTaskModal();
     await loadTasks(); await loadAlerts();
-    showToast(isEdit ? 'Tarea actualizada ✓' : 'Tarea guardada 📌');
-  } else showToast('No se pudo guardar la tarea');
+    showToast(isEdit ? 'Comunicado/tarea actualizado ✓' : 'Comunicado/tarea guardado 📌');
+  } else showToast((r && r.error) ? r.error : 'No se pudo guardar');
 }
 
 async function deleteNote(id) {
@@ -2143,22 +2143,46 @@ async function searchConvMessages(q) {
 function renderTaskConfirmUsers(show, selectedIds) {
   const wrap = $('task-confirm-users');
   const list = $('task-confirm-user-list');
-  // Normalizar: puede llegar como string JSON desde la BD
+  if (!show) { wrap.classList.add('hidden'); return; }
+
   const ids = Array.isArray(selectedIds) ? selectedIds.map(Number)
     : (typeof selectedIds === 'string' ? JSON.parse(selectedIds || '[]').map(Number) : []);
-  // Solo usuarios de las áreas marcadas en "Notificar a"
   const allUsers = window._cachedUsers || [];
+  const positions = window._cachedPositions || [];
   const selectedAreaIds = getSelectedNotifyAreaIds();
   const users = selectedAreaIds.length
     ? allUsers.filter(u => selectedAreaIds.includes(u.position_id))
     : allUsers;
-  list.innerHTML = users.map(u =>
-    `<label class="task-check-row" style="font-size:0.83rem">
+
+  // Agrupar por área
+  const groups = {};
+  const noArea = [];
+  users.forEach(u => {
+    const pos = positions.find(p => p.id === u.position_id);
+    if (pos) {
+      if (!groups[pos.name]) groups[pos.name] = [];
+      groups[pos.name].push(u);
+    } else {
+      noArea.push(u);
+    }
+  });
+
+  const userRow = u =>
+    `<label class="task-check-row" style="font-size:0.83rem;padding-left:0.8rem">
       <input type="checkbox" value="${u.id}" ${ids.includes(Number(u.id)) ? 'checked' : ''}>
       <span>${esc(u.first_name + ' ' + (u.last_name || ''))}</span>
-    </label>`
-  ).join('');
-  if (!show) { wrap.classList.add('hidden'); return; }
+    </label>`;
+
+  let html = '';
+  Object.entries(groups).forEach(([area, us]) => {
+    html += `<div class="confirm-area-group">
+      <span class="confirm-area-label">${esc(area)}</span>
+      ${us.map(userRow).join('')}
+    </div>`;
+  });
+  html += noArea.map(userRow).join('');
+
+  list.innerHTML = html;
   wrap.classList.remove('hidden');
 }
 

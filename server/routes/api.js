@@ -398,10 +398,11 @@ router.post('/tasks', async (req, res) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)`,
       [req.user?.company_id || 1, contactId, conversation_id || null, anchored_message_id || null,
        anchored_message_id || null, guestLabel, text.trim(),
-       assigned_to || null, notify_also && notify_also.length ? notify_also : null,
+       assigned_to || null, notify_also && notify_also.length ? JSON.stringify(notify_also) : null,
        !!high_priority, remind_at || null, due_at || null, req.user?.user_id || null,
-       !!requires_confirmation, confirm_user_ids && confirm_user_ids.length ? confirm_user_ids : null,
-       notifyAreasVal]
+       !!requires_confirmation,
+       confirm_user_ids && confirm_user_ids.length ? JSON.stringify(confirm_user_ids) : null,
+       notifyAreasVal !== null ? JSON.stringify(notifyAreasVal) : null]
     );
     const row = await db.get('SELECT * FROM tasks ORDER BY id DESC LIMIT 1');
 
@@ -494,8 +495,12 @@ router.put('/tasks/:id', async (req, res) => {
        remind_at !== undefined ? remind_at : task.remind_at,
        due_at !== undefined ? due_at : task.due_at,
        requires_confirmation !== undefined ? !!requires_confirmation : task.requires_confirmation,
-       confirm_user_ids !== undefined ? (confirm_user_ids && confirm_user_ids.length ? confirm_user_ids : null) : task.confirm_user_ids,
-       notify_areas !== undefined ? (notify_areas && notify_areas.length ? notify_areas : null) : task.notify_areas,
+       confirm_user_ids !== undefined
+         ? (confirm_user_ids && confirm_user_ids.length ? JSON.stringify(confirm_user_ids) : null)
+         : (task.confirm_user_ids ? JSON.stringify(task.confirm_user_ids) : null),
+       notify_areas !== undefined
+         ? (notify_areas && notify_areas.length ? JSON.stringify(notify_areas) : null)
+         : (task.notify_areas ? JSON.stringify(task.notify_areas) : null),
        req.params.id]
     );
 

@@ -1147,6 +1147,9 @@ body {
 .task-check-row { display: flex; gap: 8px; align-items: flex-start; font-size: 0.85rem; color: #333; cursor: pointer; }
 .task-check-row input { margin-top: 3px; width: auto; }
 .task-check-row small { color: #888; }
+.confirm-area-group { margin-top: 6px; }
+.confirm-area-label { display: block; font-size: 0.7rem; font-weight: 700; color: #04443d;
+  letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 2px; }
 #task-anchored-preview {
   background: #f2faf7; border-left: 3px solid var(--green-mid);
   padding: 6px 10px; font-size: 0.78rem; color: #555; border-radius: 6px;
