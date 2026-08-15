@@ -395,13 +395,13 @@ router.post('/tasks', async (req, res) => {
                           assigned_to, notify_also, status, high_priority,
                           remind_at, due_at, created_by,
                           requires_confirmation, confirm_user_ids, notify_areas)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?::jsonb)`,
       [req.user?.company_id || 1, contactId, conversation_id || null, anchored_message_id || null,
        anchored_message_id || null, guestLabel, text.trim(),
        assigned_to || null, notify_also && notify_also.length ? notify_also : null,
        !!high_priority, remind_at || null, due_at || null, req.user?.user_id || null,
        !!requires_confirmation,
-       confirm_user_ids && confirm_user_ids.length ? JSON.stringify(confirm_user_ids) : null,
+       confirm_user_ids && confirm_user_ids.length ? confirm_user_ids : null,
        notifyAreasVal !== null ? JSON.stringify(notifyAreasVal) : null]
     );
     const row = await db.get('SELECT * FROM tasks ORDER BY id DESC LIMIT 1');
@@ -485,7 +485,7 @@ router.put('/tasks/:id', async (req, res) => {
     await db.run(
       `UPDATE tasks SET message_text = ?, assigned_to = ?, notify_also = ?,
               high_priority = ?, remind_at = ?, due_at = ?,
-              requires_confirmation = ?, confirm_user_ids = ?::jsonb, notify_areas = ?::jsonb
+              requires_confirmation = ?, confirm_user_ids = ?, notify_areas = ?::jsonb
               ${remindChanged ? ', remind_sent_at = NULL' : ''}
        WHERE id = ?`,
       [text !== undefined ? text : task.message_text,
@@ -496,8 +496,8 @@ router.put('/tasks/:id', async (req, res) => {
        due_at !== undefined ? due_at : task.due_at,
        requires_confirmation !== undefined ? !!requires_confirmation : task.requires_confirmation,
        confirm_user_ids !== undefined
-         ? (confirm_user_ids && confirm_user_ids.length ? JSON.stringify(confirm_user_ids) : null)
-         : (task.confirm_user_ids ? JSON.stringify(task.confirm_user_ids) : null),
+         ? (confirm_user_ids && confirm_user_ids.length ? confirm_user_ids : null)
+         : (task.confirm_user_ids || null),
        notify_areas !== undefined
          ? (notify_areas && notify_areas.length ? JSON.stringify(notify_areas) : null)
          : (task.notify_areas ? JSON.stringify(task.notify_areas) : null),
