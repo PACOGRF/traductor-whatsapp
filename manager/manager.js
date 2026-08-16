@@ -693,20 +693,22 @@ function renderAlerts() {
     }));
 }
 
-// Saltar al mensaje anclado (scroll + resaltado temporal)
+// Saltar al mensaje anclado (scroll + resaltado permanente hasta cambio de conversación)
 async function gotoMessage(convId, msgId) {
   closeTasksScreen();
+  if (_gotoHighlightEl) { _gotoHighlightEl.style.outline = ''; _gotoHighlightEl = null; }
   if (convId && convId !== state.activeConvId) await selectConversation(convId);
   const el = messagesArea.querySelector(`[data-msg-id="${msgId}"]`);
   if (el) {
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     el.style.outline = '3px solid #ffc107';
-    setTimeout(() => { el.style.outline = ''; }, 2500);
+    _gotoHighlightEl = el;
   }
 }
 
 /* ── Modal chincheta 📌 (crear/editar tarea o nota) ──── */
 let taskModalCtx = {};   // { messageId?, taskId?, fromScreen? }
+let _gotoHighlightEl = null;
 
 function fillUserSelect(sel, selectedId) {
   const allUsers = window._cachedUsers || state.users;
@@ -982,6 +984,7 @@ function renderTasksScreen() {
 
 /* ── Seleccionar conversación ───────────────────────── */
 async function selectConversation(id) {
+  if (_gotoHighlightEl) { _gotoHighlightEl.style.outline = ''; _gotoHighlightEl = null; }
   state.activeConvId = id;
   const conv = state.conversations.find(c => c.id === id);
   if (!conv) return;
