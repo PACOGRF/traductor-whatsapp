@@ -49,6 +49,7 @@ router.get('/conversations', async (req, res) => {
       LEFT JOIN contacts ct ON ct.id = c.contact_id
       LEFT JOIN contact_groups cg ON cg.id = COALESCE(c.group_id, ct.group_id)
       LEFT JOIN conversation_participants cp ON cp.conversation_id = c.id AND cp.user_id = ?
+      WHERE c.deleted_at IS NULL
       ORDER BY last_message_at DESC NULLS LAST
     `, [userId]);
     // Marca "sin responder": el último mensaje es del cliente y supera el umbral de la empresa
@@ -78,6 +79,54 @@ router.get('/conversations', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Miembros de un chat interno
+router.get('/conversations/:id/members', async (req, res) => {
+  try {
+    const rows = await db.all(
+      `SELECT cp.user_id, cp.can_reply, u.first_name, u.last_name, u.role, p.name AS position_name
+       FROM conversation_participants cp
+       JOIN users u ON u.id = cp.user_id
+       LEFT JOIN positions p ON p.id = u.position_id
+       WHERE cp.conversation_id = ?
+       ORDER BY u.first_name, u.last_name`,
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Renombrar chat interno (manager, supervisor o creador)
+router.patch('/conversations/:id', async (req, res) => {
+  try {
+    const conv = await db.get(
+      'SELECT created_by, channel FROM conversations WHERE id = ? AND deleted_at IS NULL', [req.params.id]);
+    if (!conv) return res.status(404).json({ error: 'No encontrada' });
+    if (conv.channel !== 'internal') return res.status(400).json({ error: 'Solo chats internos' });
+    const role = req.user?.role;
+    if (role !== 'manager' && role !== 'supervisor' && conv.created_by !== req.user?.user_id)
+      return res.status(403).json({ error: 'Sin permiso' });
+    const { name } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Nombre requerido' });
+    await db.run('UPDATE conversations SET internal_name = ? WHERE id = ?', [name.trim(), req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Eliminar chat interno — soft delete (manager o creador)
+router.delete('/conversations/:id', async (req, res) => {
+  try {
+    const conv = await db.get(
+      'SELECT created_by, channel FROM conversations WHERE id = ? AND deleted_at IS NULL', [req.params.id]);
+    if (!conv) return res.status(404).json({ error: 'No encontrada' });
+    if (conv.channel !== 'internal') return res.status(400).json({ error: 'Solo chats internos' });
+    const role = req.user?.role;
+    if (role !== 'manager' && conv.created_by !== req.user?.user_id)
+      return res.status(403).json({ error: 'Sin permiso' });
+    await db.run('UPDATE conversations SET deleted_at = NOW() WHERE id = ?', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // Mensajes de una conversación (los empleados solo si la conversación es visible)

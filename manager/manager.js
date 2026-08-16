@@ -340,12 +340,18 @@ function renderConvList() {
           </div>
           <div class="conv-preview">${esc(preview)}</div>
         </div>
-        <div class="conv-time">${time}</div>
+        <div class="conv-right">
+          ${isInternal ? `<button class="conv-gear" data-conv-id="${c.id}" data-conv-name="${esc(displayName)}" data-created-by="${c.created_by || ''}" title="Opciones del chat">⚙</button>` : ''}
+          <div class="conv-time">${time}</div>
+        </div>
       </div>`;
   }).join('');
 
   convList.querySelectorAll('.conv-item').forEach(el => {
     el.addEventListener('click', () => selectConversation(Number(el.dataset.id)));
+  });
+  convList.querySelectorAll('.conv-gear').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); openGearMenu(btn); });
   });
 }
 
@@ -2301,13 +2307,94 @@ socket.on('conv_list_changed', () => loadConversations());
 
 // -- Chat interno: modal selector de empleados --
 let intConvState = { users: [], selected: new Set(), filter: 'all', q: '' };
+let _manageConvId = null;
+let _origMemberIds = new Set();
 
-async function openIntConvModal() {
+// ── Gear menu (chats internos) ──────────────────────────────
+let _gearConvId = null;
+let _gearConvName = '';
+let _gearCreatedBy = null;
+
+function openGearMenu(btn) {
+  _gearConvId   = Number(btn.dataset.convId);
+  _gearConvName = btn.dataset.convName || 'Chat interno';
+  _gearCreatedBy = Number(btn.dataset.createdBy) || null;
+
+  const myId   = Number(localStorage.getItem('chatlink_user_id'));
+  const myRole = localStorage.getItem('chatlink_role') || '';
+  const canManage = myRole === 'manager' || myRole === 'supervisor' || _gearCreatedBy === myId;
+  const canDelete = myRole === 'manager' || _gearCreatedBy === myId;
+
+  const menu = $('conv-gear-menu');
+  $('cgm-rename').style.display  = canManage ? '' : 'none';
+  $('cgm-members').style.display = canManage ? '' : 'none';
+  $('cgm-delete').style.display  = canDelete ? '' : 'none';
+
+  const rect = btn.getBoundingClientRect();
+  menu.style.top  = (rect.bottom + 4) + 'px';
+  menu.style.left = Math.max(4, rect.right - 160) + 'px';
+  menu.classList.remove('hidden');
+}
+
+function closeGearMenu() { $('conv-gear-menu').classList.add('hidden'); }
+
+document.addEventListener('click', e => {
+  if (!$('conv-gear-menu').classList.contains('hidden') && !e.target.closest('#conv-gear-menu, .conv-gear'))
+    closeGearMenu();
+});
+
+$('cgm-rename').addEventListener('click', async () => {
+  closeGearMenu();
+  const newName = prompt('Nuevo nombre del chat:', _gearConvName);
+  if (!newName || !newName.trim()) return;
+  const r = await apiFetch(`/api/conversations/${_gearConvId}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: newName.trim() }),
+  });
+  if (r && !r.error) { await loadConversations(); showToast('Chat renombrado'); }
+  else showToast(r?.error || 'Error al renombrar');
+});
+
+$('cgm-members').addEventListener('click', () => {
+  closeGearMenu();
+  openIntConvModal(_gearConvId);
+});
+
+$('cgm-delete').addEventListener('click', async () => {
+  closeGearMenu();
+  if (!confirm(`¿Eliminar el chat "${_gearConvName}"? Esta acción no se puede deshacer.`)) return;
+  const r = await apiFetch(`/api/conversations/${_gearConvId}`, { method: 'DELETE' });
+  if (r && !r.error) {
+    if (state.activeConvId === _gearConvId) state.activeConvId = null;
+    await loadConversations();
+    showToast('Chat eliminado');
+  } else showToast(r?.error || 'Error al eliminar');
+});
+
+async function openIntConvModal(manageConvId = null) {
+  _manageConvId = manageConvId;
   intConvState.selected = new Set();
   intConvState.filter = 'all';
   intConvState.q = '';
   $('intconv-search').value = '';
-  // Mostrar modal inmediatamente (no esperar a la carga de datos)
+  $('intconv-name').value = '';
+
+  if (manageConvId) {
+    $('intconv-header').querySelector('span').lastChild.textContent = ' Gestionar miembros';
+    $('intconv-create').textContent = 'Guardar cambios';
+    const [members, conv] = await Promise.all([
+      apiFetch(`/api/conversations/${manageConvId}/members`),
+      Promise.resolve(state.conversations.find(c => c.id === manageConvId)),
+    ]);
+    (members || []).forEach(m => intConvState.selected.add(m.user_id));
+    _origMemberIds = new Set(intConvState.selected);
+    if (conv) $('intconv-name').value = conv.internal_name || '';
+  } else {
+    $('intconv-header').querySelector('span').lastChild.textContent = ' Chat interno';
+    $('intconv-create').textContent = 'Crear chat';
+    _origMemberIds = new Set();
+  }
+
   $('intconv-overlay').classList.remove('hidden');
   $('intconv-modal').classList.remove('hidden');
   $('intconv-list').innerHTML = '<div style="padding:12px;color:#999;font-size:0.82rem;text-align:center">Cargando empleados…</div>';
@@ -2418,16 +2505,41 @@ function intConvUserRow(u, selected) {
 async function createInternalConv() {
   const ids = Array.from(intConvState.selected);
   if (!ids.length) { showToast('Selecciona al menos un empleado'); return; }
+
+  // Modo gestionar miembros: añadir/quitar respecto al estado original
+  if (_manageConvId) {
+    const toAdd = ids.filter(id => !_origMemberIds.has(id));
+    const toRemove = Array.from(_origMemberIds).filter(id => !ids.includes(id));
+    const nameField = $('intconv-name').value.trim();
+    const tasks = [];
+    toAdd.forEach(uid => tasks.push(apiFetch(`/api/conversations/${_manageConvId}/members`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: uid }),
+    })));
+    toRemove.forEach(uid => tasks.push(apiFetch(`/api/conversations/${_manageConvId}/members/${uid}`, { method: 'DELETE' })));
+    if (nameField) tasks.push(apiFetch(`/api/conversations/${_manageConvId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: nameField }),
+    }));
+    await Promise.all(tasks);
+    closeIntConvModal();
+    await loadConversations();
+    showToast('Chat actualizado');
+    return;
+  }
+
+  // Modo crear
   const myId = Number(localStorage.getItem('chatlink_user_id'));
   const myUser = (window._cachedUsers || []).find(u => u.id === myId);
   const myName = myUser ? myUser.first_name : 'Yo';
   const names = intConvState.users.filter(u => ids.includes(u.id)).map(u => u.first_name);
-  const chatName = [myName, ...names].join(', ');
+  const autoName = [myName, ...names].join(', ');
+  const customName = $('intconv-name').value.trim();
   try {
     const r = await apiFetch('/api/internal-conversations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_ids: ids, name: chatName }),
+      body: JSON.stringify({ member_ids: ids, name: customName || autoName }),
     });
     if (!r || !r.id) throw new Error('Sin respuesta');
     closeIntConvModal();

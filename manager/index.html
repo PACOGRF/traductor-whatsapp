@@ -376,6 +376,13 @@
   </div>
 </div>
 
+<!-- Menú contextual engranaje (chats internos) -->
+<div id="conv-gear-menu" class="hidden">
+  <button id="cgm-rename">Renombrar</button>
+  <button id="cgm-members">Gestionar miembros</button>
+  <button id="cgm-delete" class="cgm-danger">Eliminar chat</button>
+</div>
+
 <!-- Modal: chat interno (selector de empleados) -->
 <div id="intconv-overlay" class="hidden"></div>
 <div id="intconv-modal" class="hidden">
@@ -384,6 +391,7 @@
     <button id="intconv-close">✕</button>
   </div>
   <div id="intconv-body">
+    <input id="intconv-name" type="text" placeholder="Nombre del chat (opcional)" autocomplete="off" style="margin-bottom:8px">
     <div id="intconv-tabs">
       <button class="intconv-tab active" data-filter="all">Todos</button>
       <button class="intconv-tab" data-filter="role">Por rol</button>
