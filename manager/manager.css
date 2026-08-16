@@ -1658,6 +1658,24 @@ body {
 .tcl-name { font-weight: 600; color: #075e54; }
 .tcl-dt { color: #666; font-size: 0.76rem; }
 .tcl-empty { color: #999; font-style: italic; }
+
+/* Historial de confirmaciones dentro del modal */
+#task-confirm-log-modal {
+  margin: 10px 0 4px 0;
+  padding: 10px 12px;
+  background: #f0f7f6;
+  border-left: 3px solid #075e54;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.83rem;
+}
+.tcm-header {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #04443d;
+  margin-bottom: 6px;
+}
 .task-confirm-btn {
   padding: 3px 10px;
   background: #075e54;

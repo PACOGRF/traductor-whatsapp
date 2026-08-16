@@ -627,6 +627,14 @@ function taskCardHtml(t, showClient) {
 }
 
 function wireTaskCardEvents(rootEl) {
+  rootEl.querySelectorAll('.task-card').forEach(card => {
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', e => {
+      if (e.target.closest('button, select, input, a')) return;
+      const id = Number(card.querySelector('[data-id]')?.dataset.id);
+      if (id) openTaskModal({ taskId: id });
+    });
+  });
   rootEl.querySelectorAll('.status-pill').forEach(b =>
     b.addEventListener('click', () => changeStatus(Number(b.dataset.id), b.dataset.status)));
   rootEl.querySelectorAll('.task-del-btn').forEach(b =>
@@ -801,6 +809,28 @@ function openTaskModal(ctx = {}) {
   const reqConfirm = task ? !!task.requires_confirmation : false;
   $('task-requires-confirm').checked = reqConfirm;
   renderTaskConfirmUsers(reqConfirm, task ? (task.confirm_user_ids || []) : []);
+
+  // Historial de confirmaciones (solo al editar)
+  const logModal = $('task-confirm-log-modal');
+  const logList  = $('task-confirm-log-modal-list');
+  logList.innerHTML = '';
+  if (isEdit && reqConfirm) {
+    logModal.classList.remove('hidden');
+    apiFetch(`/api/tasks/${ctx.taskId}/confirmations`).then(rows => {
+      if (!rows || rows.error || !rows.length) {
+        logList.innerHTML = '<span class="tcl-empty">Nadie ha confirmado aún</span>';
+      } else {
+        logList.innerHTML = rows.map(r => {
+          const dt    = new Date(r.confirmed_at);
+          const fecha = dt.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+          const hora  = dt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+          return `<div class="tcl-row"><span class="tcl-name">${esc(r.first_name + ' ' + (r.last_name || ''))}</span><span class="tcl-dt">${fecha} · ${hora}</span></div>`;
+        }).join('');
+      }
+    });
+  } else {
+    logModal.classList.add('hidden');
+  }
 
   $('task-modal').classList.remove('hidden');
   $('task-overlay').classList.remove('hidden');
