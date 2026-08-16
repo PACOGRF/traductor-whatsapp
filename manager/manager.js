@@ -990,6 +990,7 @@ function renderTasksScreen() {
 
 /* ── Seleccionar conversación ───────────────────────── */
 async function selectConversation(id) {
+  closeGearMenu();
   if (_gotoHighlightEl) { _gotoHighlightEl.style.outline = ''; _gotoHighlightEl = null; }
   state.activeConvId = id;
   const conv = state.conversations.find(c => c.id === id);
