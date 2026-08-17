@@ -1681,6 +1681,57 @@ body {
 .tcl-dt { color: #666; font-size: 0.76rem; }
 .tcl-empty { color: #999; font-style: italic; }
 
+/* Modal gestión de aviso vencido */
+#alert-ack-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 500; }
+#alert-ack-overlay.hidden { display: none; }
+#alert-ack-modal {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: #fff; border-radius: 12px; width: min(420px, 94vw);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.3); z-index: 501; overflow: hidden;
+}
+#alert-ack-modal.hidden { display: none; }
+#alert-ack-header {
+  background: #04443d; color: #fff; padding: 0.7rem 1rem;
+  display: flex; justify-content: space-between; align-items: center; font-weight: 600;
+}
+#alert-ack-header button { background: none; border: none; color: #fff; font-size: 1.1rem; cursor: pointer; }
+#alert-ack-body { padding: 1rem 1.1rem 1.2rem; display: flex; flex-direction: column; gap: 0.6rem; }
+#alert-ack-text { font-weight: 600; color: #222; margin: 0; }
+#alert-ack-actions { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.4rem; }
+.btn-conforme {
+  background: #075e54; color: #fff; border: none; border-radius: 8px;
+  padding: 10px 14px; font-size: 0.9rem; cursor: pointer; font-weight: 600; text-align: left;
+}
+.btn-conforme:hover { background: #128c7e; }
+.btn-pendiente {
+  background: #f5f5f5; color: #555; border: 1px solid #ddd; border-radius: 8px;
+  padding: 10px 14px; font-size: 0.9rem; cursor: pointer; text-align: left;
+}
+.btn-pendiente:hover { background: #ebebeb; }
+#alert-ack-status-info {
+  font-size: 0.8rem; color: #856404; background: #fff8e1;
+  border-radius: 6px; padding: 6px 10px;
+}
+#alert-ack-status-info.hidden { display: none; }
+.al-ack-btn {
+  background: none; border: none; cursor: pointer; font-size: 0.85rem;
+  color: #555; padding: 0 4px; flex-shrink: 0;
+}
+.al-ack-btn:hover { color: #075e54; }
+.al-pendiente { border-left: 3px solid #f59e0b !important; }
+.ack-badge {
+  font-size: 0.68rem; font-weight: 700; border-radius: 4px;
+  padding: 2px 6px; margin-right: 6px; flex-shrink: 0;
+}
+.ack-conforme  { background: #d4edda; color: #155724; }
+.ack-pendiente { background: #fff3cd; color: #856404; }
+#task-ack-log-modal {
+  margin: 6px 0 4px 0; padding: 10px 12px;
+  background: #fff8e1; border-left: 3px solid #f59e0b;
+  border-radius: 0 6px 6px 0; font-size: 0.83rem;
+}
+#task-ack-log-modal.hidden { display: none; }
+
 /* Historial de confirmaciones dentro del modal */
 #task-confirm-log-modal {
   margin: 10px 0 4px 0;

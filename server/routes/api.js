@@ -393,12 +393,15 @@ router.get('/tasks', async (req, res) => {
               ct.name       AS contact_name,
               u.first_name  AS assigned_first_name,
               u.last_name   AS assigned_last_name,
+              ua.first_name AS ack_first_name,
+              ua.last_name  AS ack_last_name,
               COALESCE(tcc.confirmation_count, 0) AS confirmation_count,
               tc_me.confirmed_at AS confirmed_by_me_at
        FROM tasks t
        LEFT JOIN conversations c ON c.id = t.conversation_id
        LEFT JOIN contacts ct     ON ct.id = t.contact_id
        LEFT JOIN users u         ON u.id = t.assigned_to
+       LEFT JOIN users ua        ON ua.id = t.alert_ack_by
        LEFT JOIN (
          SELECT task_id, COUNT(*) AS confirmation_count
          FROM task_confirmations GROUP BY task_id
@@ -412,6 +415,7 @@ router.get('/tasks', async (req, res) => {
       ...r,
       client_label: r.contact_name || r.conv_guest_name || r.guest_name || '—',
       assigned_label: r.assigned_first_name ? `${r.assigned_first_name} ${r.assigned_last_name || ''}`.trim() : null,
+      alert_ack_by_name: r.ack_first_name ? `${r.ack_first_name} ${r.ack_last_name || ''}`.trim() : null,
       confirmation_count: Number(r.confirmation_count) || 0,
       confirmed_by_me: !!r.confirmed_by_me_at,
     })));
@@ -603,19 +607,27 @@ router.get('/alerts', async (req, res) => {
   try {
     const now = Date.now();
     const tasks = await db.all(
-      `SELECT t.*, c.guest_name AS conv_guest_name, ct.name AS contact_name
+      `SELECT t.*, c.guest_name AS conv_guest_name, ct.name AS contact_name,
+              ua.first_name AS ack_first_name, ua.last_name AS ack_last_name
        FROM tasks t
        LEFT JOIN conversations c ON c.id = t.conversation_id
        LEFT JOIN contacts ct ON ct.id = t.contact_id
+       LEFT JOIN users ua ON ua.id = t.alert_ack_by
        WHERE t.deleted_at IS NULL AND t.status <> 'done'
          AND (t.remind_at IS NOT NULL OR t.due_at IS NOT NULL)`
     );
+    const userId = req.user?.user_id;
     const alerts = [];
     for (const t of tasks) {
       const client = t.contact_name || t.conv_guest_name || t.guest_name || '—';
       if (t.remind_at && new Date(t.remind_at).getTime() <= now) {
+        if (t.alert_ack_status === 'conforme') continue; // ocultar si ya gestionado
         alerts.push({ type: 'remind', task_id: t.id, conversation_id: t.conversation_id,
-          client, text: t.message_text, when: t.remind_at, high_priority: t.high_priority });
+          client, text: t.message_text, when: t.remind_at, high_priority: t.high_priority,
+          alert_ack_status: t.alert_ack_status,
+          created_by: t.created_by, assigned_to: t.assigned_to,
+          can_ack: (req.user?.role === 'manager' || t.created_by === userId || t.assigned_to === userId),
+        });
       }
       if (t.due_at && new Date(t.due_at).getTime() <= now) {
         alerts.push({ type: 'due', task_id: t.id, conversation_id: t.conversation_id,
@@ -1466,6 +1478,26 @@ router.get('/tasks/:id/confirmations', async (req, res) => {
       ...r,
       user_name: `${r.first_name} ${r.last_name || ''}`.trim(),
     })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Gestionar aviso vencido de una tarea: CONFORME o PENDIENTE
+router.post('/tasks/:id/alert-ack', async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!['conforme', 'pendiente'].includes(status))
+      return res.status(400).json({ error: 'Estado inválido' });
+    const task = await db.get('SELECT created_by, assigned_to FROM tasks WHERE id = ? AND deleted_at IS NULL', [req.params.id]);
+    if (!task) return res.status(404).json({ error: 'No encontrada' });
+    const userId = req.user?.user_id;
+    if (req.user?.role !== 'manager' && task.created_by !== userId && task.assigned_to !== userId)
+      return res.status(403).json({ error: 'Sin permiso' });
+    await db.run(
+      'UPDATE tasks SET alert_ack_status = ?, alert_ack_by = ?, alert_ack_at = NOW() WHERE id = ?',
+      [status, userId, req.params.id]
+    );
+    emitTasksChanged(req);
+    res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

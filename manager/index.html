@@ -272,6 +272,11 @@
       <div id="task-confirm-log-modal-list"></div>
     </div>
 
+    <div id="task-ack-log-modal" class="hidden">
+      <div class="tcm-header">Gestión del aviso</div>
+      <div id="task-ack-log-modal-list"></div>
+    </div>
+
     <div class="task-actions">
       <button id="task-cancel" class="btn-secondary">Cancelar</button>
       <button id="task-save" class="btn-primary">Guardar</button>
@@ -373,6 +378,24 @@
       <button id="newconv-new-contact" class="btn-secondary">+ Crear contacto nuevo</button>
       <button id="newconv-close2" class="btn-secondary">Cerrar</button>
     </div>
+  </div>
+</div>
+
+<!-- Modal: gestión de aviso vencido (CONFORME / PENDIENTE) -->
+<div id="alert-ack-overlay" class="hidden"></div>
+<div id="alert-ack-modal" class="hidden">
+  <div id="alert-ack-header">
+    <span>⏱ Gestionar aviso</span>
+    <button id="alert-ack-close">✕</button>
+  </div>
+  <div id="alert-ack-body">
+    <p id="alert-ack-text"></p>
+    <p id="alert-ack-client" style="font-size:0.82rem;color:#555;margin-top:-6px"></p>
+    <div id="alert-ack-actions">
+      <button id="alert-ack-conforme" class="btn-conforme">✓ Conforme — aviso gestionado</button>
+      <button id="alert-ack-pendiente" class="btn-pendiente">⏳ Pendiente — mantener aviso</button>
+    </div>
+    <div id="alert-ack-status-info" class="hidden"></div>
   </div>
 </div>
 

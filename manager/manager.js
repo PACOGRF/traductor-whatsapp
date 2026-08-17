@@ -678,11 +678,13 @@ function renderAlerts() {
   el.innerHTML = state.alerts.map(a => {
     const mins = Math.floor((Date.now() - new Date(a.when).getTime()) / 60000);
     const late = mins >= 1440 ? Math.floor(mins / 1440) + ' d' : mins >= 60 ? Math.floor(mins / 60) + ' h' : mins + ' min';
+    const isPendiente = a.type === 'remind' && a.alert_ack_status === 'pendiente';
     return `
-      <div class="alert-item" data-conv="${a.conversation_id || ''}">
+      <div class="alert-item${isPendiente ? ' al-pendiente' : ''}" data-conv="${a.conversation_id || ''}" data-task-id="${a.task_id || ''}">
         ${a.type === 'unanswered' ? `<button class="al-dismiss" data-conv="${a.conversation_id}" title="Descartar esta alerta">✕</button>` : ''}
+        ${a.type === 'remind' && a.can_ack ? `<button class="al-ack-btn" data-task-id="${a.task_id}" data-client="${esc(a.client)}" data-text="${esc(a.text || '')}" data-status="${a.alert_ack_status || ''}" title="Gestionar aviso">⚙</button>` : ''}
         <span class="al-client">${a.high_priority ? '<span class="prio-dot"></span> ' : ''}${esc(a.client)}</span>
-        <span class="al-late">· ${a.type === 'due' ? 'límite' : a.type === 'unanswered' ? 'sin responder' : 'aviso'} hace ${late}</span>
+        <span class="al-late">· ${a.type === 'due' ? 'límite' : a.type === 'unanswered' ? 'sin responder' : isPendiente ? 'aviso PENDIENTE' : 'aviso'} hace ${late}</span>
         <div class="al-text">${esc(truncate(a.text || '', 70))}</div>
       </div>`;
   }).join('');
@@ -697,7 +699,51 @@ function renderAlerts() {
       const r = await apiFetch(`/api/conversations/${btn.dataset.conv}/dismiss-alert`, { method: 'POST' });
       if (r) { await loadAlerts(); showToast('Alerta descartada (volverá si el cliente escribe de nuevo)'); }
     }));
+  el.querySelectorAll('.al-ack-btn').forEach(btn =>
+    btn.addEventListener('click', e => { e.stopPropagation(); openAlertAckModal(btn); }));
 }
+
+// ── Modal gestión de aviso ──────────────────────────────────
+let _ackTaskId = null;
+
+function openAlertAckModal(btn) {
+  _ackTaskId = Number(btn.dataset.taskId);
+  $('alert-ack-text').textContent   = btn.dataset.text || '(sin descripción)';
+  $('alert-ack-client').textContent = 'Cliente: ' + (btn.dataset.client || '—');
+  const statusInfo = $('alert-ack-status-info');
+  if (btn.dataset.status === 'pendiente') {
+    statusInfo.textContent = '⏳ Marcado como PENDIENTE anteriormente';
+    statusInfo.classList.remove('hidden');
+  } else {
+    statusInfo.classList.add('hidden');
+  }
+  $('alert-ack-overlay').classList.remove('hidden');
+  $('alert-ack-modal').classList.remove('hidden');
+}
+
+function closeAlertAckModal() {
+  $('alert-ack-overlay').classList.add('hidden');
+  $('alert-ack-modal').classList.add('hidden');
+  _ackTaskId = null;
+}
+
+async function sendAlertAck(status) {
+  if (!_ackTaskId) return;
+  const r = await apiFetch(`/api/tasks/${_ackTaskId}/alert-ack`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  closeAlertAckModal();
+  if (r && !r.error) {
+    await loadAlerts(); await loadTasks();
+    showToast(status === 'conforme' ? 'Aviso marcado como CONFORME ✓' : 'Aviso mantenido como PENDIENTE ⏳');
+  } else showToast(r?.error || 'Error al gestionar el aviso');
+}
+
+$('alert-ack-close').addEventListener('click', closeAlertAckModal);
+$('alert-ack-overlay').addEventListener('click', closeAlertAckModal);
+$('alert-ack-conforme').addEventListener('click', () => sendAlertAck('conforme'));
+$('alert-ack-pendiente').addEventListener('click', () => sendAlertAck('pendiente'));
 
 // Saltar al mensaje anclado (scroll + resaltado permanente hasta cambio de conversación)
 async function gotoMessage(convId, msgId) {
@@ -838,6 +884,24 @@ function openTaskModal(ctx = {}) {
     });
   } else {
     logModal.classList.add('hidden');
+  }
+
+  // Historial de gestión del aviso (solo al editar, si tiene remind_at)
+  const ackModal = $('task-ack-log-modal');
+  const ackList  = $('task-ack-log-modal-list');
+  if (ackModal && ackList) {
+    if (isEdit && task && task.remind_at && task.alert_ack_status) {
+      ackModal.classList.remove('hidden');
+      const dt    = task.alert_ack_at ? new Date(task.alert_ack_at) : null;
+      const fecha = dt ? dt.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+      const hora  = dt ? dt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '';
+      const badge = task.alert_ack_status === 'conforme'
+        ? '<span class="ack-badge ack-conforme">CONFORME</span>'
+        : '<span class="ack-badge ack-pendiente">PENDIENTE</span>';
+      ackList.innerHTML = `<div class="tcl-row">${badge}<span class="tcl-name">${esc(task.alert_ack_by_name || '—')}</span><span class="tcl-dt">${fecha}${hora ? ' · ' + hora : ''}</span></div>`;
+    } else if (ackModal) {
+      ackModal.classList.add('hidden');
+    }
   }
 
   $('task-modal').classList.remove('hidden');
