@@ -1718,6 +1718,15 @@ body {
   color: #555; padding: 0 4px; flex-shrink: 0;
 }
 .al-ack-btn:hover { color: #075e54; }
+.al-ack-icon { font-size: 0.8rem; color: #888; margin-right: 4px; flex-shrink: 0; }
+.al-remind-item { cursor: pointer; }
+.al-remind-item:hover { background: #f0f7f6; }
+.task-ack-link {
+  background: none; border: none; cursor: pointer; font-size: 0.82rem;
+  color: #d97706; padding: 0; text-decoration: underline dotted;
+}
+.task-ack-link:hover { color: #b45309; }
+.task-ack-link.ack-pendiente { color: #f59e0b; font-weight: 600; }
 .al-pendiente { border-left: 3px solid #f59e0b !important; }
 .ack-badge {
   font-size: 0.68rem; font-weight: 700; border-radius: 4px;

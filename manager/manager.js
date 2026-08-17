@@ -653,6 +653,8 @@ function wireTaskCardEvents(rootEl) {
     b.addEventListener('click', () => confirmTask(Number(b.dataset.id))));
   rootEl.querySelectorAll('.task-confirm-count').forEach(b =>
     b.addEventListener('click', () => toggleConfirmLog(Number(b.dataset.id))));
+  rootEl.querySelectorAll('.task-ack-link').forEach(btn =>
+    btn.addEventListener('click', () => openAlertAckModal({ taskId: Number(btn.dataset.id), text: btn.dataset.text, client: btn.dataset.client, status: btn.dataset.status })));
 }
 
 // Mitad superior derecha: tareas (no realizadas) de la conversación abierta
@@ -679,39 +681,47 @@ function renderAlerts() {
     const mins = Math.floor((Date.now() - new Date(a.when).getTime()) / 60000);
     const late = mins >= 1440 ? Math.floor(mins / 1440) + ' d' : mins >= 60 ? Math.floor(mins / 60) + ' h' : mins + ' min';
     const isPendiente = a.type === 'remind' && a.alert_ack_status === 'pendiente';
+    const isRemind    = a.type === 'remind';
     return `
-      <div class="alert-item${isPendiente ? ' al-pendiente' : ''}" data-conv="${a.conversation_id || ''}" data-task-id="${a.task_id || ''}">
-        ${a.type === 'unanswered' ? `<button class="al-dismiss" data-conv="${a.conversation_id}" title="Descartar esta alerta">✕</button>` : ''}
-        ${a.type === 'remind' && a.can_ack ? `<button class="al-ack-btn" data-task-id="${a.task_id}" data-client="${esc(a.client)}" data-text="${esc(a.text || '')}" data-status="${a.alert_ack_status || ''}" title="Gestionar aviso">⚙</button>` : ''}
+      <div class="alert-item${isPendiente ? ' al-pendiente' : ''}${isRemind ? ' al-remind-item' : ''}"
+           data-conv="${a.conversation_id || ''}" data-task-id="${a.task_id || ''}"
+           data-client="${esc(a.client)}" data-text="${esc(a.text || '')}"
+           data-ack-status="${a.alert_ack_status || ''}" data-can-ack="${a.can_ack ? '1' : ''}">
+        ${a.type === 'unanswered' ? `<button class="al-dismiss" data-conv="${a.conversation_id}" title="Descartar">✕</button>` : ''}
+        ${isRemind ? '<span class="al-ack-icon" title="Clic para gestionar aviso">⚙</span>' : ''}
         <span class="al-client">${a.high_priority ? '<span class="prio-dot"></span> ' : ''}${esc(a.client)}</span>
         <span class="al-late">· ${a.type === 'due' ? 'límite' : a.type === 'unanswered' ? 'sin responder' : isPendiente ? 'aviso PENDIENTE' : 'aviso'} hace ${late}</span>
         <div class="al-text">${esc(truncate(a.text || '', 70))}</div>
       </div>`;
   }).join('');
   el.querySelectorAll('.alert-item').forEach(item =>
-    item.addEventListener('click', () => {
+    item.addEventListener('click', e => {
+      if (e.target.closest('.al-dismiss')) return;
+      const taskId = Number(item.dataset.taskId);
+      if (item.dataset.canAck === '1' && taskId) {
+        openAlertAckModal({ taskId, text: item.dataset.text, client: item.dataset.client, status: item.dataset.ackStatus });
+        return;
+      }
       const convId = Number(item.dataset.conv);
       if (convId) { closeTasksScreen(); selectConversation(convId); }
     }));
   el.querySelectorAll('.al-dismiss').forEach(btn =>
-    btn.addEventListener('click', async (e) => {
+    btn.addEventListener('click', async e => {
       e.stopPropagation();
       const r = await apiFetch(`/api/conversations/${btn.dataset.conv}/dismiss-alert`, { method: 'POST' });
       if (r) { await loadAlerts(); showToast('Alerta descartada (volverá si el cliente escribe de nuevo)'); }
     }));
-  el.querySelectorAll('.al-ack-btn').forEach(btn =>
-    btn.addEventListener('click', e => { e.stopPropagation(); openAlertAckModal(btn); }));
 }
 
 // ── Modal gestión de aviso ──────────────────────────────────
 let _ackTaskId = null;
 
-function openAlertAckModal(btn) {
-  _ackTaskId = Number(btn.dataset.taskId);
-  $('alert-ack-text').textContent   = btn.dataset.text || '(sin descripción)';
-  $('alert-ack-client').textContent = 'Cliente: ' + (btn.dataset.client || '—');
+function openAlertAckModal({ taskId, text, client, status }) {
+  _ackTaskId = Number(taskId);
+  $('alert-ack-text').textContent   = text || '(sin descripción)';
+  $('alert-ack-client').textContent = 'Cliente: ' + (client || '—');
   const statusInfo = $('alert-ack-status-info');
-  if (btn.dataset.status === 'pendiente') {
+  if (status === 'pendiente') {
     statusInfo.textContent = '⏳ Marcado como PENDIENTE anteriormente';
     statusInfo.classList.remove('hidden');
   } else {
@@ -1025,15 +1035,25 @@ function renderTasksScreen() {
     return true;
   });
 
+  const _curUserId = Number(localStorage.getItem('chatlink_user_id'));
+  const _curRole   = localStorage.getItem('chatlink_role');
+
   tbody.innerHTML = rows.length ? rows.map(t => {
-    const overdueDue = t.due_at && new Date(t.due_at) < new Date() && t.status !== 'done';
+    const overdueDue     = t.due_at && new Date(t.due_at) < new Date() && t.status !== 'done';
+    const overdueRemind  = t.remind_at && new Date(t.remind_at) < new Date() && t.status !== 'done';
+    const canAckTask     = _curRole === 'manager' || t.created_by === _curUserId || t.assigned_to === _curUserId;
     const resumen = esc(truncate(t.message_text || '', 80));
+    const remindCell = t.remind_at
+      ? (overdueRemind && canAckTask
+          ? `<button class="task-ack-link${t.alert_ack_status === 'pendiente' ? ' ack-pendiente' : ''}" data-id="${t.id}" data-text="${esc(t.message_text||'')}" data-client="${esc(t.client_label||'')}" data-status="${t.alert_ack_status||''}" title="Gestionar aviso">⏱ ${fmtDT(t.remind_at)}</button>`
+          : `⏱ ${fmtDT(t.remind_at)}`)
+      : '—';
     return `<tr>
       <td>${t.high_priority ? '<span class="prio-dot"></span> ' : ''}${esc(t.client_label || '—')}</td>
       <td>${t.anchored_message_id ? `<span class="task-link" data-conv="${t.conversation_id}" data-msg="${t.anchored_message_id}" title="Ir al mensaje">${resumen}</span>` : resumen}</td>
       <td>${esc(t.assigned_label || '—')}</td>
       <td><button class="status-pill status-${t.status}" data-id="${t.id}" data-status="${t.status}">${STATUS_LABELS[t.status]}</button></td>
-      <td>${t.remind_at ? fmtDT(t.remind_at) : '—'}</td>
+      <td class="${overdueRemind && t.alert_ack_status !== 'conforme' ? 'overdue' : ''}">${remindCell}</td>
       <td class="${overdueDue ? 'overdue' : ''}">${t.due_at ? fmtDT(t.due_at) : '—'}</td>
       <td class="row-actions">
         <button class="task-edit-btn" data-id="${t.id}" title="Editar">${IC.edit}</button>
@@ -1045,6 +1065,8 @@ function renderTasksScreen() {
   wireTaskCardEvents(tbody);
   tbody.querySelectorAll('.task-link').forEach(el =>
     el.addEventListener('click', () => gotoMessage(Number(el.dataset.conv), Number(el.dataset.msg))));
+  tbody.querySelectorAll('.task-ack-link').forEach(btn =>
+    btn.addEventListener('click', () => openAlertAckModal({ taskId: Number(btn.dataset.id), text: btn.dataset.text, client: btn.dataset.client, status: btn.dataset.status })));
 
   // Móvil (D11): tarjetas apiladas en lugar de tabla
   const cards = $('tasks-cards');
