@@ -1727,6 +1727,11 @@ body {
 }
 .task-ack-link:hover { color: #b45309; }
 .task-ack-link.ack-pendiente { color: #f59e0b; font-weight: 600; }
+.task-remind-edit {
+  background: none; border: none; cursor: pointer; font-size: 0.82rem;
+  color: #555; padding: 0; text-decoration: underline dotted;
+}
+.task-remind-edit:hover { color: #075e54; }
 .al-pendiente { border-left: 3px solid #f59e0b !important; }
 .ack-badge {
   font-size: 0.68rem; font-weight: 700; border-radius: 4px;

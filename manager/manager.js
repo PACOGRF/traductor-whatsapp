@@ -655,6 +655,8 @@ function wireTaskCardEvents(rootEl) {
     b.addEventListener('click', () => toggleConfirmLog(Number(b.dataset.id))));
   rootEl.querySelectorAll('.task-ack-link').forEach(btn =>
     btn.addEventListener('click', () => openAlertAckModal({ taskId: Number(btn.dataset.id), text: btn.dataset.text, client: btn.dataset.client, status: btn.dataset.status })));
+  rootEl.querySelectorAll('.task-remind-edit').forEach(btn =>
+    btn.addEventListener('click', () => openTaskModal({ taskId: Number(btn.dataset.id) })));
 }
 
 // Mitad superior derecha: tareas (no realizadas) de la conversación abierta
@@ -1045,8 +1047,8 @@ function renderTasksScreen() {
     const resumen = esc(truncate(t.message_text || '', 80));
     const remindCell = t.remind_at
       ? (overdueRemind && canAckTask
-          ? `<button class="task-ack-link${t.alert_ack_status === 'pendiente' ? ' ack-pendiente' : ''}" data-id="${t.id}" data-text="${esc(t.message_text||'')}" data-client="${esc(t.client_label||'')}" data-status="${t.alert_ack_status||''}" title="Gestionar aviso">⏱ ${fmtDT(t.remind_at)}</button>`
-          : `⏱ ${fmtDT(t.remind_at)}`)
+          ? `<button class="task-ack-link${t.alert_ack_status === 'pendiente' ? ' ack-pendiente' : ''}" data-id="${t.id}" data-text="${esc(t.message_text||'')}" data-client="${esc(t.client_label||'')}" data-status="${t.alert_ack_status||''}" title="Gestionar aviso vencido">⏱ ${fmtDT(t.remind_at)}</button>`
+          : `<button class="task-remind-edit" data-id="${t.id}" title="Ver / editar tarea">⏱ ${fmtDT(t.remind_at)}</button>`)
       : '—';
     return `<tr>
       <td>${t.high_priority ? '<span class="prio-dot"></span> ' : ''}${esc(t.client_label || '—')}</td>
