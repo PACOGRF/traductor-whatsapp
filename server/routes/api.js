@@ -75,7 +75,9 @@ router.get('/conversations', async (req, res) => {
       let unanswered_hours = null;
       if (r.last_direction === 'incoming' && r.last_message_at) {
         const h = (now - new Date(r.last_message_at).getTime()) / 3600000;
-        if (h >= alertHours) unanswered_hours = Math.floor(h);
+        const dismissedAfterLastMsg = r.unanswered_dismissed_at &&
+          new Date(r.unanswered_dismissed_at) >= new Date(r.last_message_at);
+        if (h >= alertHours && !dismissedAfterLastMsg) unanswered_hours = Math.floor(h);
       }
       result.push({ ...r, user_pinned, unanswered_hours, can_reply: access === 'reply' });
     }
