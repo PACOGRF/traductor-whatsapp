@@ -92,6 +92,12 @@
     <!-- Aviso solo-lectura (empleados sin permiso de respuesta) -->
     <div id="readonly-note" class="hidden">👁️ Solo lectura: no tienes permiso para responder en esta conversación</div>
 
+    <!-- Barra alerta "sin responder" — se muestra cuando la conv tiene unanswered_hours -->
+    <div id="unanswered-bar" class="hidden">
+      <span id="unanswered-bar-text">⚠️ Sin respuesta</span>
+      <button id="unanswered-dismiss-btn" title="Descartar alerta (volverá si el cliente escribe de nuevo)">✕ Descartar alerta</button>
+    </div>
+
     <!-- Barra inferior -->
     <div id="bottom-bar">
       <div id="quick-bar-row">

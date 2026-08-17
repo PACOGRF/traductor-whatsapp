@@ -334,7 +334,7 @@ function renderConvList() {
           <div class="conv-name">
             ${!isInternal && c.channel === 'telegram' ? `<span class="conv-channel" title="Telegram">${IC.telegram}</span>` : ''}${esc(displayName)}
             ${!isInternal && c.group_name ? `<span class="conv-group-badge">${esc(c.group_name)}</span>` : ''}
-            ${!isInternal && c.unanswered_hours ? `<span class="conv-unanswered" title="Sin responder">${IC.warn} ${c.unanswered_hours}h</span>` : ''}
+            ${!isInternal && c.unanswered_hours ? `<button class="conv-unanswered" data-conv="${c.id}" title="Clic para descartar alerta sin responder">⚠ ${c.unanswered_hours}h</button>` : ''}
             ${!isInternal && c.guest_language && c.guest_language !== 'es' ? `<span class="conv-lang">${langName(c.guest_language)}</span>` : ''}
             ${isInternal ? `<span class="conv-lang" title="Chat interno">${c.member_count || ''} miembros</span>` : ''}
           </div>
@@ -352,6 +352,21 @@ function renderConvList() {
   });
   convList.querySelectorAll('.conv-gear').forEach(btn => {
     btn.addEventListener('click', e => { e.stopPropagation(); openGearMenu(btn); });
+  });
+  convList.querySelectorAll('.conv-unanswered').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const convId = Number(btn.dataset.conv);
+      const r = await apiFetch(`/api/conversations/${convId}/dismiss-alert`, { method: 'POST' });
+      if (r) {
+        const conv = state.conversations.find(c => c.id === convId);
+        if (conv) conv.unanswered_hours = null;
+        renderConvList();
+        await loadAlerts();
+        if (state.activeConvId === convId) $('unanswered-bar').classList.add('hidden');
+        showToast('Alerta descartada ✓');
+      }
+    });
   });
 }
 
@@ -752,6 +767,20 @@ async function sendAlertAck(status) {
   } else showToast(r?.error || 'Error al gestionar el aviso');
 }
 
+$('unanswered-dismiss-btn').addEventListener('click', async () => {
+  const convId = state.activeConvId;
+  if (!convId) return;
+  const r = await apiFetch(`/api/conversations/${convId}/dismiss-alert`, { method: 'POST' });
+  if (r) {
+    const conv = state.conversations.find(c => c.id === convId);
+    if (conv) conv.unanswered_hours = null;
+    $('unanswered-bar').classList.add('hidden');
+    renderConvList();
+    await loadAlerts();
+    showToast('Alerta descartada ✓');
+  }
+});
+
 $('alert-ack-close').addEventListener('click', closeAlertAckModal);
 $('alert-ack-overlay').addEventListener('click', closeAlertAckModal);
 $('alert-ack-conforme').addEventListener('click', () => sendAlertAck('conforme'));
@@ -1101,6 +1130,14 @@ async function selectConversation(id) {
     } else {
       chatGuestName.textContent = `${conv.guest_phone || ''}${langSuffix}`;
     }
+  }
+
+  // Barra alerta sin responder
+  const unanswBar = $('unanswered-bar');
+  if (unanswBar) {
+    const hasAlert = conv.unanswered_hours && conv.channel !== 'internal';
+    unanswBar.classList.toggle('hidden', !hasAlert);
+    if (hasAlert) $('unanswered-bar-text').textContent = `⚠️ Sin respuesta desde hace ${conv.unanswered_hours} h`;
   }
 
   // Permiso de respuesta (Sprint 2): empleados "solo leer" no pueden escribir

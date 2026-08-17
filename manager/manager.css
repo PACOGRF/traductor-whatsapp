@@ -1238,7 +1238,9 @@ body {
   font-size: 0.64rem; background: #e53935; color: white;
   border-radius: 10px; padding: 1px 6px; font-weight: 700;
   margin-left: 4px; vertical-align: middle; white-space: nowrap;
+  border: none; cursor: pointer;
 }
+.conv-unanswered:hover { background: #b71c1c; }
 
 /* ═══════════ SPRINT 2: banner + EMPLEADOS ═══════════ */
 
@@ -1355,6 +1357,17 @@ body {
   padding: 6px 12px; font-size: 0.78rem; text-align: center;
 }
 #readonly-note.hidden { display: none; }
+#unanswered-bar {
+  background: #fff3cd; color: #7a5c00; border-top: 1px solid #f0d47a;
+  padding: 6px 14px; font-size: 0.78rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+#unanswered-bar.hidden { display: none; }
+#unanswered-dismiss-btn {
+  background: #e53935; color: white; border: none; border-radius: 6px;
+  padding: 3px 10px; font-size: 0.75rem; cursor: pointer; white-space: nowrap;
+}
+#unanswered-dismiss-btn:hover { background: #b71c1c; }
 
 /* Móvil: tabla de empleados → tarjetas */
 @media (max-width: 768px) {
