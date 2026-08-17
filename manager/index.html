@@ -517,18 +517,39 @@
       <option value="done">Realizadas</option>
     </select>
     <select id="tasks-filter-assigned"></select>
+    <button id="tasks-clear-filters" class="hidden" title="Limpiar filtros de columna">✕ Limpiar filtros</button>
   </div>
   <div id="tasks-table-wrap">
     <table id="tasks-table">
       <thead>
         <tr>
-          <th>Cliente</th><th>Resumen</th><th>Responsable</th>
-          <th>Estado</th><th>Alerta</th><th>F. límite</th><th></th>
+          <th><button class="col-filter-btn" data-col="cliente">Cliente <span class="cf-icon">▼</span></button></th>
+          <th>Resumen</th>
+          <th><button class="col-filter-btn" data-col="responsable">Responsable <span class="cf-icon">▼</span></button></th>
+          <th><button class="col-filter-btn" data-col="estado">Estado <span class="cf-icon">▼</span></button></th>
+          <th><button class="col-filter-btn" data-col="alerta">Alerta <span class="cf-icon">▼</span></button></th>
+          <th><button class="col-filter-btn" data-col="due">F. límite <span class="cf-icon">▼</span></button></th>
+          <th></th>
         </tr>
       </thead>
       <tbody id="tasks-table-body"></tbody>
     </table>
     <div id="tasks-cards"></div>
+  </div>
+</div>
+
+<!-- Dropdown filtro de columna (position:fixed, fuera del flujo) -->
+<div id="col-filter-drop" class="hidden">
+  <div id="cfd-sort">
+    <button id="cfd-sort-asc">↑ A → Z</button>
+    <button id="cfd-sort-desc">↓ Z → A</button>
+  </div>
+  <hr class="cfd-sep">
+  <input id="cfd-search" type="text" placeholder="Buscar…" autocomplete="off">
+  <div id="cfd-list"></div>
+  <div id="cfd-footer">
+    <button id="cfd-apply">Aplicar</button>
+    <button id="cfd-cancel">Cancelar</button>
   </div>
 </div>
 

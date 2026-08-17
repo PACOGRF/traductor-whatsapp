@@ -1049,6 +1049,157 @@ $('tasks-search').addEventListener('input', renderTasksScreen);
 $('tasks-filter-status').addEventListener('change', renderTasksScreen);
 $('tasks-filter-assigned').addEventListener('change', renderTasksScreen);
 
+// ── Filtros de columna (Excel-like) ───────────────────────
+const _colFilter = { sort: { col: null, dir: 'asc' }, filters: {} };
+let _cfd_col = null;
+let _cfd_pending = null; // Set temporal mientras el dropdown está abierto
+let _cfd_allVals = [];   // valores completos de la columna activa
+
+const CFD_DATE_COLS = new Set(['alerta', 'due']);
+
+function _taskVal(t, col) {
+  switch (col) {
+    case 'cliente':     return t.client_label || '—';
+    case 'responsable': return t.assigned_label || '—';
+    case 'estado':      return STATUS_LABELS[t.status] || t.status || '—';
+    case 'alerta': {
+      if (!t.remind_at) return 'Sin aviso';
+      const ov = new Date(t.remind_at) < new Date() && t.status !== 'done';
+      return ov ? 'Vencida' : 'Activa';
+    }
+    case 'due': return t.due_at ? 'Con fecha límite' : 'Sin fecha límite';
+    default: return '';
+  }
+}
+
+function _taskSortKey(t, col) {
+  switch (col) {
+    case 'cliente':     return (t.client_label || '').toLowerCase();
+    case 'responsable': return (t.assigned_label || '').toLowerCase();
+    case 'estado': {
+      const order = { pending: 0, in_progress: 1, done: 2 };
+      return order[t.status] ?? 9;
+    }
+    case 'alerta': return t.remind_at || '￿';
+    case 'due':    return t.due_at    || '￿';
+    default: return '';
+  }
+}
+
+function _buildCfdList(vals) {
+  const activeSet = _cfd_pending;
+  const allChecked = !activeSet;
+  $('cfd-list').innerHTML = `
+    <label class="cfd-item cfd-item-all">
+      <input type="checkbox" id="cfd-check-all" ${allChecked ? 'checked' : ''}> Seleccionar todo
+    </label>
+    ${vals.map(v => `
+      <label class="cfd-item">
+        <input type="checkbox" class="cfd-val-chk" data-val="${esc(v)}"
+          ${allChecked || (activeSet && activeSet.has(v)) ? 'checked' : ''}> ${esc(v)}
+      </label>`).join('')}`;
+
+  $('cfd-check-all').addEventListener('change', e => {
+    const chks = $('cfd-list').querySelectorAll('.cfd-val-chk');
+    if (e.target.checked) { _cfd_pending = null; chks.forEach(c => { c.checked = true; }); }
+    else { _cfd_pending = new Set(); chks.forEach(c => { c.checked = false; }); }
+  });
+
+  $('cfd-list').querySelectorAll('.cfd-val-chk').forEach(chk => {
+    chk.addEventListener('change', () => {
+      if (_cfd_pending === null) _cfd_pending = new Set(_cfd_allVals);
+      if (chk.checked) _cfd_pending.add(chk.dataset.val);
+      else             _cfd_pending.delete(chk.dataset.val);
+      if (_cfd_pending.size === _cfd_allVals.length) _cfd_pending = null;
+      $('cfd-check-all').checked = !_cfd_pending;
+    });
+  });
+}
+
+function openColFilter(col, anchorEl) {
+  _cfd_col = col;
+  _cfd_allVals = [...new Set(state.tasks.map(t => _taskVal(t, col)))].sort();
+  _cfd_pending = _colFilter.filters[col] ?? null;
+  if (_cfd_pending) _cfd_pending = new Set(_cfd_pending); // copia para no mutar estado
+
+  const isDate = CFD_DATE_COLS.has(col);
+  $('cfd-sort-asc').textContent  = isDate ? '↑ Más antiguo primero' : '↑ A → Z';
+  $('cfd-sort-desc').textContent = isDate ? '↓ Más reciente primero' : '↓ Z → A';
+
+  $('cfd-search').value = '';
+  _buildCfdList(_cfd_allVals);
+
+  const drop = $('col-filter-drop');
+  drop.classList.remove('hidden');
+  const rect = anchorEl.getBoundingClientRect();
+  const dropW = 240;
+  let left = rect.left;
+  if (left + dropW > window.innerWidth - 8) left = window.innerWidth - dropW - 8;
+  drop.style.left = left + 'px';
+  drop.style.top  = (rect.bottom + 4) + 'px';
+  $('cfd-search').focus();
+}
+
+function closeColFilter() {
+  $('col-filter-drop').classList.add('hidden');
+  _cfd_col = null; _cfd_pending = null;
+}
+
+function updateColFilterHeaders() {
+  document.querySelectorAll('.col-filter-btn').forEach(btn => {
+    const col = btn.dataset.col;
+    const hasFilter = !!_colFilter.filters[col];
+    const isSort    = _colFilter.sort.col === col;
+    btn.classList.toggle('cf-active',      hasFilter && !isSort);
+    btn.classList.toggle('cf-sort-active', isSort);
+    const icon = btn.querySelector('.cf-icon');
+    if (icon) icon.textContent = isSort ? (_colFilter.sort.dir === 'asc' ? '↑' : '↓') : '▼';
+  });
+  const hasAny = Object.values(_colFilter.filters).some(Boolean) || _colFilter.sort.col;
+  $('tasks-clear-filters').classList.toggle('hidden', !hasAny);
+}
+
+// Eventos del dropdown
+$('cfd-sort-asc').addEventListener('click', () => {
+  _colFilter.sort = { col: _cfd_col, dir: 'asc' };
+  closeColFilter(); renderTasksScreen(); updateColFilterHeaders();
+});
+$('cfd-sort-desc').addEventListener('click', () => {
+  _colFilter.sort = { col: _cfd_col, dir: 'desc' };
+  closeColFilter(); renderTasksScreen(); updateColFilterHeaders();
+});
+$('cfd-apply').addEventListener('click', () => {
+  _colFilter.filters[_cfd_col] = _cfd_pending; // null = sin filtro, Set = filtrado
+  closeColFilter(); renderTasksScreen(); updateColFilterHeaders();
+});
+$('cfd-cancel').addEventListener('click', closeColFilter);
+
+$('cfd-search').addEventListener('input', () => {
+  const q = $('cfd-search').value.toLowerCase();
+  _buildCfdList(q ? _cfd_allVals.filter(v => v.toLowerCase().includes(q)) : _cfd_allVals);
+});
+
+$('tasks-clear-filters').addEventListener('click', () => {
+  _colFilter.filters = {}; _colFilter.sort = { col: null, dir: 'asc' };
+  renderTasksScreen(); updateColFilterHeaders();
+});
+
+document.querySelectorAll('.col-filter-btn').forEach(btn => {
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (!$('col-filter-drop').classList.contains('hidden') && _cfd_col === btn.dataset.col) {
+      closeColFilter();
+    } else {
+      openColFilter(btn.dataset.col, btn);
+    }
+  });
+});
+
+document.addEventListener('click', e => {
+  if ($('col-filter-drop').classList.contains('hidden')) return;
+  if (!$('col-filter-drop').contains(e.target) && !e.target.closest('.col-filter-btn')) closeColFilter();
+});
+
 function renderTasksScreen() {
   const tbody = $('tasks-table-body');
   if (!tbody || $('tasks-screen').classList.contains('hidden')) return;
@@ -1061,12 +1212,27 @@ function renderTasksScreen() {
 
   const q  = ($('tasks-search').value || '').toLowerCase();
   const fs = $('tasks-filter-status').value;
-  const rows = state.tasks.filter(t => {
+  let rows = state.tasks.filter(t => {
     if (fs && t.status !== fs) return false;
     if (fa.value && t.assigned_to !== Number(fa.value)) return false;
     if (q && !((t.client_label || '').toLowerCase().includes(q) || (t.message_text || '').toLowerCase().includes(q))) return false;
+    // Filtros de columna Excel
+    for (const [col, valSet] of Object.entries(_colFilter.filters)) {
+      if (!valSet) continue;
+      if (!valSet.has(_taskVal(t, col))) return false;
+    }
     return true;
   });
+  // Orden de columna
+  if (_colFilter.sort.col) {
+    rows = [...rows].sort((a, b) => {
+      const av = _taskSortKey(a, _colFilter.sort.col);
+      const bv = _taskSortKey(b, _colFilter.sort.col);
+      if (av < bv) return _colFilter.sort.dir === 'asc' ? -1 : 1;
+      if (av > bv) return _colFilter.sort.dir === 'asc' ?  1 : -1;
+      return 0;
+    });
+  }
 
   const _curUserId = Number(localStorage.getItem('chatlink_user_id'));
   const _curRole   = localStorage.getItem('chatlink_role');
@@ -1105,6 +1271,7 @@ function renderTasksScreen() {
   const cards = $('tasks-cards');
   cards.innerHTML = rows.map(t => taskCardHtml(t, true)).join('');
   wireTaskCardEvents(cards);
+  updateColFilterHeaders();
 }
 
 /* ── Seleccionar conversación ───────────────────────── */

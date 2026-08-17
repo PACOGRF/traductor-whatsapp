@@ -1228,6 +1228,63 @@ body {
 #tasks-table .row-actions button { background: none; border: none; cursor: pointer; font-size: 0.9rem; padding: 2px 4px; }
 #tasks-cards { display: none; }
 
+/* ── Filtros de columna (Excel-like) ─────────────────── */
+.col-filter-btn {
+  background: none; border: none; cursor: pointer;
+  color: white; font-size: 0.74rem; letter-spacing: 0.04em; font-weight: 700;
+  display: flex; align-items: center; gap: 5px; white-space: nowrap;
+  width: 100%; padding: 0; text-align: left;
+}
+.col-filter-btn .cf-icon { font-size: 0.78em; opacity: 0.5; transition: opacity 0.15s; }
+.col-filter-btn.cf-active .cf-icon { opacity: 1; color: #a5d6c1; }
+.col-filter-btn.cf-sort-active .cf-icon { opacity: 1; color: #ffd54f; }
+
+#col-filter-drop {
+  position: fixed; z-index: 9999;
+  background: white; color: #333;
+  border: 1px solid #d0d0d0; border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.16);
+  min-width: 220px; max-width: 290px; font-size: 0.85rem;
+}
+#col-filter-drop.hidden { display: none; }
+#cfd-sort { display: flex; flex-direction: column; padding: 5px; gap: 1px; }
+#cfd-sort button {
+  text-align: left; background: none; border: none;
+  padding: 7px 10px; border-radius: 5px; cursor: pointer; color: #333; font-size: 0.84rem;
+}
+#cfd-sort button:hover { background: #f0f7f5; }
+.cfd-sep { margin: 0; border: none; border-top: 1px solid #eee; }
+#cfd-search {
+  width: 100%; box-sizing: border-box;
+  padding: 7px 10px; border: none; border-bottom: 1px solid #eee;
+  font-size: 0.84rem; outline: none; background: #fafafa; color: #333;
+}
+#cfd-list { max-height: 210px; overflow-y: auto; padding: 4px 0; }
+.cfd-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 10px; cursor: pointer; user-select: none; font-size: 0.84rem;
+}
+.cfd-item:hover { background: #f0f7f5; }
+.cfd-item input[type=checkbox] { margin: 0; cursor: pointer; width: 14px; height: 14px; flex-shrink: 0; }
+.cfd-item-all { font-weight: 600; border-bottom: 1px solid #eee; margin-bottom: 2px; }
+#cfd-footer { display: flex; gap: 6px; padding: 8px; border-top: 1px solid #eee; }
+#cfd-apply {
+  flex: 1; background: #075e54; color: white;
+  border: none; border-radius: 5px; padding: 6px 0; cursor: pointer; font-size: 0.84rem;
+}
+#cfd-apply:hover { background: #0a7a6d; }
+#cfd-cancel {
+  flex: 1; background: none; color: #555;
+  border: 1px solid #ddd; border-radius: 5px; padding: 6px 0; cursor: pointer; font-size: 0.84rem;
+}
+#cfd-cancel:hover { background: #f5f5f5; }
+#tasks-clear-filters {
+  background: #e53935; color: white; border: none; border-radius: 5px;
+  padding: 5px 11px; cursor: pointer; font-size: 0.82rem; white-space: nowrap;
+}
+#tasks-clear-filters.hidden { display: none; }
+#tasks-clear-filters:hover { background: #c62828; }
+
 /* Móvil (D11): tabla → tarjetas apiladas */
 @media (max-width: 768px) {
   #tasks-table { display: none; }
