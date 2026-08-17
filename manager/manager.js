@@ -327,13 +327,13 @@ function renderConvList() {
     const preview  = c.last_message ? truncate(c.last_message, 40) : 'Sin mensajes';
     const time     = c.last_message_at ? formatTime(c.last_message_at) : '';
     const active   = c.id === state.activeConvId ? 'active' : '';
-    const pinned   = c.pinned_at ? ' conv-pinned' : '';
+    const pinned   = c.user_pinned ? ' conv-pinned' : '';
     return `
       <div class="conv-item ${active}${pinned}" data-id="${c.id}" data-name="${esc(displayName)}" data-phone="${esc(c.guest_phone || '')}">
         <div class="conv-avatar${isInternal ? ' conv-avatar-internal' : ''}">${isInternal ? IC.users : initials}</div>
         <div class="conv-info">
           <div class="conv-name">
-            ${c.pinned_at ? '<span class="conv-pin-icon" title="Fijado">📌</span>' : ''}
+            ${c.user_pinned ? '<span class="conv-pin-icon" title="Fijado">📌</span>' : ''}
             ${!isInternal && c.channel === 'telegram' ? `<span class="conv-channel" title="Telegram">${IC.telegram}</span>` : ''}${esc(displayName)}
             ${!isInternal && c.group_name ? `<span class="conv-group-badge">${esc(c.group_name)}</span>` : ''}
             ${!isInternal && c.unanswered_hours ? `<button class="conv-unanswered" data-conv="${c.id}" title="Clic para descartar alerta sin responder">⚠ ${c.unanswered_hours}h</button>` : ''}
@@ -343,7 +343,7 @@ function renderConvList() {
           <div class="conv-preview">${esc(preview)}</div>
         </div>
         <div class="conv-right">
-          <button class="conv-gear" data-conv-id="${c.id}" data-conv-name="${esc(displayName)}" data-channel="${c.channel}" data-created-by="${c.created_by || ''}" data-pinned="${c.pinned_at ? '1' : ''}" title="Opciones del chat">⚙</button>
+          <button class="conv-gear" data-conv-id="${c.id}" data-conv-name="${esc(displayName)}" data-channel="${c.channel}" data-created-by="${c.created_by || ''}" data-pinned="${c.user_pinned ? '1' : ''}" title="Opciones del chat">⚙</button>
           <div class="conv-time">${time}</div>
         </div>
       </div>`;

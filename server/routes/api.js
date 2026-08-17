@@ -41,6 +41,7 @@ router.get('/conversations', async (req, res) => {
         cg.name AS group_name,
         cp.user_id AS is_member,
         cp.can_reply AS member_can_reply,
+        ucp.pinned_at AS user_pinned_at,
         (SELECT COUNT(*) FROM conversation_participants WHERE conversation_id = c.id) AS member_count,
         (SELECT m.translated_text FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message,
         (SELECT m.created_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message_at,
@@ -49,9 +50,10 @@ router.get('/conversations', async (req, res) => {
       LEFT JOIN contacts ct ON ct.id = c.contact_id
       LEFT JOIN contact_groups cg ON cg.id = COALESCE(c.group_id, ct.group_id)
       LEFT JOIN conversation_participants cp ON cp.conversation_id = c.id AND cp.user_id = ?
+      LEFT JOIN user_conversation_pins ucp ON ucp.conversation_id = c.id AND ucp.user_id = ?
       WHERE c.deleted_at IS NULL
-      ORDER BY c.pinned_at DESC NULLS LAST, last_message_at DESC NULLS LAST
-    `, [userId]);
+      ORDER BY ucp.pinned_at DESC NULLS LAST, last_message_at DESC NULLS LAST
+    `, [userId, userId]);
     // Marca "sin responder": el último mensaje es del cliente y supera el umbral de la empresa
     const company = await db.get('SELECT alert_hours FROM companies WHERE id = 1');
     const alertHours = (company && company.alert_hours) || 4;
@@ -61,9 +63,10 @@ router.get('/conversations', async (req, res) => {
     const vis = await getVisibility(req.user);
     const result = [];
     for (const r of rows) {
+      const user_pinned = !!r.user_pinned_at;
       if (r.channel === 'internal') {
         if (!r.is_member) continue;
-        result.push({ ...r, unanswered_hours: null, can_reply: r.member_can_reply !== false });
+        result.push({ ...r, user_pinned, unanswered_hours: null, can_reply: r.member_can_reply !== false });
         continue;
       }
       // Participante directo → acceso reply aunque el grupo no le corresponda
@@ -74,7 +77,7 @@ router.get('/conversations', async (req, res) => {
         const h = (now - new Date(r.last_message_at).getTime()) / 3600000;
         if (h >= alertHours) unanswered_hours = Math.floor(h);
       }
-      result.push({ ...r, unanswered_hours, can_reply: access === 'reply' });
+      result.push({ ...r, user_pinned, unanswered_hours, can_reply: access === 'reply' });
     }
     res.json(result);
   } catch (err) {
@@ -98,16 +101,21 @@ router.get('/conversations/:id/members', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Fijar / desfijar conversación (manager o supervisor)
+// Fijar / desfijar conversación — por usuario (cada uno fija las suyas)
 router.patch('/conversations/:id/pin', async (req, res) => {
   try {
-    const conv = await db.get('SELECT pinned_at FROM conversations WHERE id = ? AND deleted_at IS NULL', [req.params.id]);
+    const conv = await db.get('SELECT id FROM conversations WHERE id = ? AND deleted_at IS NULL', [req.params.id]);
     if (!conv) return res.status(404).json({ error: 'No encontrada' });
-    const role = req.user?.role;
-    if (role !== 'manager' && role !== 'supervisor') return res.status(403).json({ error: 'Sin permiso' });
-    const newPinned = conv.pinned_at ? null : new Date().toISOString();
-    await db.run('UPDATE conversations SET pinned_at = ? WHERE id = ?', [newPinned, req.params.id]);
-    res.json({ pinned: !!newPinned });
+    const userId = req.user?.user_id;
+    const existing = await db.get(
+      'SELECT 1 FROM user_conversation_pins WHERE user_id = ? AND conversation_id = ?', [userId, req.params.id]);
+    if (existing) {
+      await db.run('DELETE FROM user_conversation_pins WHERE user_id = ? AND conversation_id = ?', [userId, req.params.id]);
+      res.json({ pinned: false });
+    } else {
+      await db.run('INSERT INTO user_conversation_pins (user_id, conversation_id) VALUES (?, ?)', [userId, req.params.id]);
+      res.json({ pinned: true });
+    }
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
