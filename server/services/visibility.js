@@ -46,6 +46,14 @@ async function accessForConversation(user, conversationId) {
     [conversationId]
   );
   if (!conv) return { conv: null, access: 'none' };
+  // Participante directo en conv externa → acceso reply
+  if (conv.channel !== 'internal' && user?.role === 'employee') {
+    const participant = await db.get(
+      'SELECT can_reply FROM conversation_participants WHERE conversation_id = ? AND user_id = ?',
+      [conversationId, user.user_id]
+    );
+    if (participant) return { conv, access: participant.can_reply !== false ? 'reply' : 'read' };
+  }
   const vis = await getVisibility(user);
   return { conv, access: convAccess(vis, conv) };
 }

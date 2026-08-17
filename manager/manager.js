@@ -320,18 +320,20 @@ function renderConvList() {
     const isInternal = c.channel === 'internal';
     const initials   = isInternal
       ? String(c.member_count || '?')
-      : (c.guest_name || c.guest_phone || '?')[0].toUpperCase();
+      : (c.contact_name || c.guest_name || c.guest_phone || '?')[0].toUpperCase();
     const displayName = isInternal
       ? (c.internal_name || 'Chat interno')
-      : (c.contact_name || c.guest_name || c.guest_phone);
+      : (c.nickname || c.contact_name || c.guest_name || c.guest_phone);
     const preview  = c.last_message ? truncate(c.last_message, 40) : 'Sin mensajes';
     const time     = c.last_message_at ? formatTime(c.last_message_at) : '';
     const active   = c.id === state.activeConvId ? 'active' : '';
+    const pinned   = c.pinned_at ? ' conv-pinned' : '';
     return `
-      <div class="conv-item ${active}" data-id="${c.id}" data-name="${esc(displayName)}" data-phone="${esc(c.guest_phone || '')}">
+      <div class="conv-item ${active}${pinned}" data-id="${c.id}" data-name="${esc(displayName)}" data-phone="${esc(c.guest_phone || '')}">
         <div class="conv-avatar${isInternal ? ' conv-avatar-internal' : ''}">${isInternal ? IC.users : initials}</div>
         <div class="conv-info">
           <div class="conv-name">
+            ${c.pinned_at ? '<span class="conv-pin-icon" title="Fijado">📌</span>' : ''}
             ${!isInternal && c.channel === 'telegram' ? `<span class="conv-channel" title="Telegram">${IC.telegram}</span>` : ''}${esc(displayName)}
             ${!isInternal && c.group_name ? `<span class="conv-group-badge">${esc(c.group_name)}</span>` : ''}
             ${!isInternal && c.unanswered_hours ? `<button class="conv-unanswered" data-conv="${c.id}" title="Clic para descartar alerta sin responder">⚠ ${c.unanswered_hours}h</button>` : ''}
@@ -341,7 +343,7 @@ function renderConvList() {
           <div class="conv-preview">${esc(preview)}</div>
         </div>
         <div class="conv-right">
-          ${isInternal ? `<button class="conv-gear" data-conv-id="${c.id}" data-conv-name="${esc(displayName)}" data-created-by="${c.created_by || ''}" title="Opciones del chat">⚙</button>` : ''}
+          <button class="conv-gear" data-conv-id="${c.id}" data-conv-name="${esc(displayName)}" data-channel="${c.channel}" data-created-by="${c.created_by || ''}" data-pinned="${c.pinned_at ? '1' : ''}" title="Opciones del chat">⚙</button>
           <div class="conv-time">${time}</div>
         </div>
       </div>`;
@@ -2436,29 +2438,38 @@ let intConvState = { users: [], selected: new Set(), filter: 'all', q: '' };
 let _manageConvId = null;
 let _origMemberIds = new Set();
 
-// ── Gear menu (chats internos) ──────────────────────────────
+// ── Gear menu (chats internos y externos) ──────────────────
 let _gearConvId = null;
 let _gearConvName = '';
 let _gearCreatedBy = null;
+let _gearChannel = 'internal';
+let _gearPinned = false;
 
 function openGearMenu(btn) {
-  _gearConvId   = Number(btn.dataset.convId);
-  _gearConvName = btn.dataset.convName || 'Chat interno';
+  _gearConvId    = Number(btn.dataset.convId);
+  _gearConvName  = btn.dataset.convName || 'Chat';
   _gearCreatedBy = Number(btn.dataset.createdBy) || null;
+  _gearChannel   = btn.dataset.channel || 'internal';
+  _gearPinned    = btn.dataset.pinned === '1';
 
   const myId   = Number(localStorage.getItem('chatlink_user_id'));
   const myRole = localStorage.getItem('chatlink_role') || '';
-  const canManage = myRole === 'manager' || myRole === 'supervisor' || _gearCreatedBy === myId;
-  const canDelete = myRole === 'manager' || _gearCreatedBy === myId;
+  const isInternal = _gearChannel === 'internal';
+  const canManage = myRole === 'manager' || myRole === 'supervisor' || (isInternal && _gearCreatedBy === myId);
+  const canDelete = myRole === 'manager' || myRole === 'supervisor' || (isInternal && _gearCreatedBy === myId);
+  const canPin    = myRole === 'manager' || myRole === 'supervisor';
 
   const menu = $('conv-gear-menu');
+  $('cgm-pin').style.display     = canPin    ? '' : 'none';
+  $('cgm-pin').textContent       = _gearPinned ? '📌 Desfijar' : '📌 Fijar arriba';
   $('cgm-rename').style.display  = canManage ? '' : 'none';
+  $('cgm-members').textContent   = isInternal ? 'Gestionar miembros' : 'Añadir participantes';
   $('cgm-members').style.display = canManage ? '' : 'none';
   $('cgm-delete').style.display  = canDelete ? '' : 'none';
 
   const rect = btn.getBoundingClientRect();
   menu.style.top  = (rect.bottom + 4) + 'px';
-  menu.style.left = Math.max(4, rect.right - 160) + 'px';
+  menu.style.left = Math.max(4, rect.right - 180) + 'px';
   menu.classList.remove('hidden');
 }
 
@@ -2469,15 +2480,24 @@ document.addEventListener('click', e => {
     closeGearMenu();
 });
 
+$('cgm-pin').addEventListener('click', async () => {
+  closeGearMenu();
+  const r = await apiFetch(`/api/conversations/${_gearConvId}/pin`, { method: 'PATCH' });
+  if (r && !r.error) {
+    await loadConversations();
+    showToast(r.pinned ? '📌 Chat fijado arriba' : 'Chat desfijado');
+  } else showToast(r?.error || 'Error al fijar');
+});
+
 $('cgm-rename').addEventListener('click', async () => {
   closeGearMenu();
-  const newName = prompt('Nuevo nombre del chat:', _gearConvName);
+  const newName = prompt('Nuevo nombre:', _gearConvName);
   if (!newName || !newName.trim()) return;
   const r = await apiFetch(`/api/conversations/${_gearConvId}`, {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: newName.trim() }),
   });
-  if (r && !r.error) { await loadConversations(); showToast('Chat renombrado'); }
+  if (r && !r.error) { await loadConversations(); showToast('Renombrado ✓'); }
   else showToast(r?.error || 'Error al renombrar');
 });
 
@@ -2488,12 +2508,13 @@ $('cgm-members').addEventListener('click', () => {
 
 $('cgm-delete').addEventListener('click', async () => {
   closeGearMenu();
-  if (!confirm(`¿Eliminar el chat "${_gearConvName}"? Esta acción no se puede deshacer.`)) return;
+  const tipo = _gearChannel === 'internal' ? 'chat' : 'conversación con';
+  if (!confirm(`¿Eliminar el ${tipo} "${_gearConvName}"? Esta acción no se puede deshacer.`)) return;
   const r = await apiFetch(`/api/conversations/${_gearConvId}`, { method: 'DELETE' });
   if (r && !r.error) {
     if (state.activeConvId === _gearConvId) state.activeConvId = null;
     await loadConversations();
-    showToast('Chat eliminado');
+    showToast('Conversación eliminada');
   } else showToast(r?.error || 'Error al eliminar');
 });
 

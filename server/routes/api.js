@@ -50,7 +50,7 @@ router.get('/conversations', async (req, res) => {
       LEFT JOIN contact_groups cg ON cg.id = COALESCE(c.group_id, ct.group_id)
       LEFT JOIN conversation_participants cp ON cp.conversation_id = c.id AND cp.user_id = ?
       WHERE c.deleted_at IS NULL
-      ORDER BY last_message_at DESC NULLS LAST
+      ORDER BY c.pinned_at DESC NULLS LAST, last_message_at DESC NULLS LAST
     `, [userId]);
     // Marca "sin responder": el último mensaje es del cliente y supera el umbral de la empresa
     const company = await db.get('SELECT alert_hours FROM companies WHERE id = 1');
@@ -66,7 +66,8 @@ router.get('/conversations', async (req, res) => {
         result.push({ ...r, unanswered_hours: null, can_reply: r.member_can_reply !== false });
         continue;
       }
-      const access = convAccess(vis, r);
+      // Participante directo → acceso reply aunque el grupo no le corresponda
+      const access = r.is_member ? 'reply' : convAccess(vis, r);
       if (access === 'none') continue;
       let unanswered_hours = null;
       if (r.last_direction === 'incoming' && r.last_message_at) {
@@ -97,33 +98,50 @@ router.get('/conversations/:id/members', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Renombrar chat interno (manager, supervisor o creador)
+// Fijar / desfijar conversación (manager o supervisor)
+router.patch('/conversations/:id/pin', async (req, res) => {
+  try {
+    const conv = await db.get('SELECT pinned_at FROM conversations WHERE id = ? AND deleted_at IS NULL', [req.params.id]);
+    if (!conv) return res.status(404).json({ error: 'No encontrada' });
+    const role = req.user?.role;
+    if (role !== 'manager' && role !== 'supervisor') return res.status(403).json({ error: 'Sin permiso' });
+    const newPinned = conv.pinned_at ? null : new Date().toISOString();
+    await db.run('UPDATE conversations SET pinned_at = ? WHERE id = ?', [newPinned, req.params.id]);
+    res.json({ pinned: !!newPinned });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Renombrar conversación — interno: internal_name, externo: nickname (manager, supervisor o creador)
 router.patch('/conversations/:id', async (req, res) => {
   try {
     const conv = await db.get(
       'SELECT created_by, channel FROM conversations WHERE id = ? AND deleted_at IS NULL', [req.params.id]);
     if (!conv) return res.status(404).json({ error: 'No encontrada' });
-    if (conv.channel !== 'internal') return res.status(400).json({ error: 'Solo chats internos' });
     const role = req.user?.role;
     if (role !== 'manager' && role !== 'supervisor' && conv.created_by !== req.user?.user_id)
       return res.status(403).json({ error: 'Sin permiso' });
     const { name } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: 'Nombre requerido' });
-    await db.run('UPDATE conversations SET internal_name = ? WHERE id = ?', [name.trim(), req.params.id]);
+    if (conv.channel === 'internal') {
+      await db.run('UPDATE conversations SET internal_name = ? WHERE id = ?', [name.trim(), req.params.id]);
+    } else {
+      await db.run('UPDATE conversations SET nickname = ? WHERE id = ?', [name.trim(), req.params.id]);
+    }
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Eliminar chat interno — soft delete (manager o creador)
+// Eliminar conversación — soft delete (manager; interno: también creador)
 router.delete('/conversations/:id', async (req, res) => {
   try {
     const conv = await db.get(
       'SELECT created_by, channel FROM conversations WHERE id = ? AND deleted_at IS NULL', [req.params.id]);
     if (!conv) return res.status(404).json({ error: 'No encontrada' });
-    if (conv.channel !== 'internal') return res.status(400).json({ error: 'Solo chats internos' });
     const role = req.user?.role;
-    if (role !== 'manager' && conv.created_by !== req.user?.user_id)
-      return res.status(403).json({ error: 'Sin permiso' });
+    const isInternal = conv.channel === 'internal';
+    const allowed = role === 'manager' || role === 'supervisor' ||
+                    (isInternal && conv.created_by === req.user?.user_id);
+    if (!allowed) return res.status(403).json({ error: 'Sin permiso' });
     await db.run('UPDATE conversations SET deleted_at = NOW() WHERE id = ?', [req.params.id]);
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
