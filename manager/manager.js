@@ -3419,4 +3419,8 @@ document.getElementById('user-pwd-save').addEventListener('click', submitUserPwd
 document.getElementById('user-pwd-confirm').addEventListener('keydown', e => {
   if (e.key === 'Enter') submitUserPwdChange();
 });
+document.getElementById('logout-btn').addEventListener('click', () => {
+  localStorage.clear();
+  window.location.href = '/login.html';
+});
 
