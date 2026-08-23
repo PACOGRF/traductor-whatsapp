@@ -1803,6 +1803,13 @@ async function saveEmployee() {
     const res = await fetch(`/api/employees/${empState.editingId}`, { method: 'PUT', headers, body: JSON.stringify(body) });
     const data = await res.json();
     if (!res.ok) { showToast(data.error || 'No se pudo guardar'); return; }
+    // Si el usuario editado es el propio, actualizar header sin recargar
+    const myId = Number(localStorage.getItem('chatlink_user_id'));
+    if (empState.editingId === myId) {
+      const newName = (body.first_name + ' ' + (body.last_name || '')).trim();
+      localStorage.setItem('chatlink_name', newName);
+      chatGuestName.textContent = idleHeader();
+    }
     closeEmpModal();
     await loadEmployees(); await loadUsers();
     showToast('Empleado actualizado ✓');
