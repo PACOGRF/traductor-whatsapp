@@ -1875,12 +1875,9 @@ $('emp-overlay').addEventListener('click', closeEmpModal);
 async function initTelegramPanel() {
   const panel = $('tg-panel');
   if (!panel) return;
-  // Solo el gestor ve la configuración del canal
-  if (localStorage.getItem('chatlink_role') !== 'manager') return;
-  panel.classList.remove('hidden');
-
-  const cfg = await apiFetch('/api/telegram/config');
-  if (cfg && cfg.configured) showTelegramStatus(cfg);
+  // Panel inferior desactivado: la configuración del canal ya está en CONFIGURACIÓN
+  // y en móvil este banner tapaba el cuadro de escribir mensajes.
+  return;
 }
 
 function showTelegramStatus(cfg) {
