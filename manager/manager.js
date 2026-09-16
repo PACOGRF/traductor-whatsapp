@@ -2886,7 +2886,7 @@ $('intconv-close').addEventListener('click', closeIntConvModal);
 $('intconv-cancel').addEventListener('click', closeIntConvModal);
 $('intconv-overlay').addEventListener('click', closeIntConvModal);
 $('intconv-create').addEventListener('click', createInternalConv);
-$('conv-internal-btn').addEventListener('click', openIntConvModal);
+$('conv-internal-btn').addEventListener('click', () => openIntConvModal());
 
 // Cerrar modal de chat interno con Escape
 document.addEventListener('keydown', e => {
