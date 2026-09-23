@@ -300,6 +300,14 @@ function renderConvFilterBar() {
 function renderConvList() {
   renderConvFilterBar();
 
+  // Badge en el icono de la app (PWA) con el nº de chats externos sin responder
+  const pendingCount = state.conversations.filter(
+    c => c.channel !== 'internal' && c.last_direction === 'incoming'
+  ).length;
+  if ('setAppBadge' in navigator) {
+    pendingCount > 0 ? navigator.setAppBadge(pendingCount) : navigator.clearAppBadge();
+  }
+
   const { type, groupId } = state.convFilter;
   let list = state.conversations;
   if (type === 'internal') {

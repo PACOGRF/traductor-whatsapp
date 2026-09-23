@@ -33,6 +33,8 @@ self.addEventListener('push', event => {
   let data = { title: 'Nuevo mensaje', body: 'Tienes un mensaje nuevo de un huésped', phone: '' };
   try { data = event.data.json(); } catch (_) {}
 
+  if ('setAppBadge' in self.navigator) self.navigator.setAppBadge();
+
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
